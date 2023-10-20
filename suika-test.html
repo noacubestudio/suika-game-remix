@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Suika Game Remix</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #303030;
+        }
+    </style>
+</head>
+<body>
+    <script src="matter.js"></script>
+
+    <script>
+        const Engine = Matter.Engine,
+            Render = Matter.Render,
+            Runner = Matter.Runner,
+            Events = Matter.Events,
+            MouseConstraint = Matter.MouseConstraint,
+            Mouse = Matter.Mouse,
+            Common = Matter.Common,
+            Composite = Matter.Composite,
+            Composites = Matter.Composites,
+            Bodies = Matter.Bodies;
+
+        // create engine
+        const engine = Engine.create();
+        const world = engine.world;
+
+        const invisibleHeight = 400;
+        const visibleChuteHeight = 200;
+        const gapHeight = 100;
+        const boxHeight = 700;
+        const boxWidth = 600;
+        const totalHeight = boxHeight + gapHeight + visibleChuteHeight + invisibleHeight;
+
+        // create renderer
+        const render = Render.create({
+            element: document.body,
+            engine: engine,
+            options: {
+                width: boxWidth,
+                height: totalHeight,
+                hasBounds: true,
+                showVelocity: true,
+                showAngleIndicator: true,
+                showCollisions: true,
+                wireframes: false,
+                showDebug: true,
+                bounds: {
+                    min: {x: 0, y: 100},
+                    max: {x:boxWidth, y: totalHeight}
+                }
+            }
+        });
+
+        Render.run(render);
+
+        // create runner
+        const runner = Runner.create();
+        Runner.run(runner, engine);
+
+        // Events.on(engine, 'collisionStart', (event) => {
+        //     event.pairs.forEach((pair) => {
+        //         if (pair === undefined) console.log("NEIN")
+        //         if (pair.bodyA === topObject || pair.bodyB === topObject) {
+        //             console.log(pair)
+        //         }
+        //     });
+        // });
+
+        // collision categories
+        const defaultCategory = 0x0001;
+        const offCategory = 0x0002;
+
+        // scene code
+
+        // floor and walls
+        const wallStyle = { fillStyle: '#222' };
+        const wallWidth = 50;
+        Composite.add(world, [
+            Bodies.rectangle(boxWidth/2, totalHeight, boxWidth, wallWidth, { isStatic: true, render: wallStyle }),
+            Bodies.rectangle(boxWidth, totalHeight-boxHeight/2, wallWidth, boxHeight, { isStatic: true, render: wallStyle }),
+            Bodies.rectangle(       0, totalHeight-boxHeight/2, wallWidth, boxHeight, { isStatic: true, render: wallStyle }),
+        ]);
+
+        // collider below the chute that only collides with specific sphere
+        const topStyle = { fillStyle: '#ff000020' };
+        const topObject = Bodies.rectangle(boxWidth/2, invisibleHeight+visibleChuteHeight+gapHeight/2, boxWidth, gapHeight, {
+            isStatic: true,
+            collisionFilter: { category: offCategory }, 
+            render: topStyle
+        });
+        Composite.add(world, topObject);
+
+        // set up all possible spheres as well as define the subset that can drop
+        const sphereProperties = [
+            { radius: 10, density: 0.1, friction: 0.9, fill: '#ffffd9', group: 1 },
+            { radius: 20, density: 0.1, friction: 0.9, fill: '#edf8b1', group: 2 },
+            { radius: 30, density: 0.1, friction: 0.9, fill: '#c7e9b4', group: 3 },
+            { radius: 40, density: 0.1, friction: 0.9, fill: '#7fcdbb', group: 4 },
+            { radius: 50, density: 0.1, friction: 0.9, fill: '#41b6c4' },
+            { radius: 60, density: 0.1, friction: 0.9, fill: '#1d91c0' },
+            { radius: 70, density: 0.1, friction: 0.9, fill: '#225ea8' },
+            { radius: 80, density: 0.1, friction: 0.9, fill: '#253494' },
+            { radius: 90, density: 0.1, friction: 0.9, fill: '#081d58' },
+        ];
+        let sphereBag = sphereProperties.slice(0, 4);
+        
+        // make correct-size tubes for all spheres that can drop
+        const chute = Composite.create();
+        sphereBag.forEach(({radius, fill, group}) => {
+            const render = { fillStyle: fill + "20" };
+            const collisionFilter = { group, category: offCategory };
+            Composite.add(chute, [
+                Bodies.rectangle(boxWidth*0.25 - radius - 2, (invisibleHeight+visibleChuteHeight)/2, boxWidth/2, invisibleHeight+visibleChuteHeight, { 
+                    isStatic: true, collisionFilter, render, staticFriction: 0 
+                }),
+                Bodies.rectangle(boxWidth*0.75 + radius + 2, (invisibleHeight+visibleChuteHeight)/2, boxWidth/2, invisibleHeight+visibleChuteHeight, { 
+                    isStatic: true, collisionFilter, render, staticFriction: 0 
+                })
+            ]);
+        });
+        Composite.add(world, chute);
+
+        // add a new shuffle of the sphere bag to the world at the top
+        sphereBag = Common.shuffle(sphereBag);
+        // console.log(sphereBag);
+
+        const stack = Composites.stack(boxWidth/2, 0, 1, sphereBag.length, 0, 0, (x, y, _1, _2, _3, i) => {
+            const pickedProperties = sphereBag[i];
+            return Bodies.circle(x, y, pickedProperties.radius, {
+                density: pickedProperties.density,
+                friction: pickedProperties.friction,
+                collisionFilter: { group: pickedProperties.group, mask: defaultCategory | offCategory },
+                render: { fillStyle: pickedProperties.fill }
+            });
+        });
+        Composite.add(world, stack);
+
+        
+
+        // add mouse control
+        const mouse = Mouse.create(render.canvas);
+        const mouseConstraint = MouseConstraint.create(engine, {
+            mouse: mouse,
+            constraint: {
+                stiffness: 0.2,
+                render: {
+                    visible: true
+                }
+            },
+            collisionFilter: { mask: 0x002 }
+        });
+
+        Composite.add(world, mouseConstraint);
+
+        // keep mouse in sync with rendering
+        render.mouse = mouse;
+
+        // mouse movement to control chute
+        let previousMousePosition = null;
+        let mouseIsDown = false;
+
+        Events.on(mouseConstraint, 'mousedown', () => {
+            mouseIsDown = true;
+        });
+        Events.on(mouseConstraint, 'mouseup', () => {
+            mouseIsDown = false;
+            // stack.bodies.forEach((sphere) => {
+            //     sphere.collisionFilter.mask = defaultCategory;
+            //     console.log(sphere.collisionFilter);
+            // });
+            // Composite.move(stack)
+        });
+
+        Events.on(mouseConstraint, 'mousemove', (event) => {
+            if (previousMousePosition !== null && mouseIsDown) {
+                const deltaX = event.mouse.position.x - previousMousePosition.x;
+                Composite.translate(chute, {x: deltaX * 1.5, y: 0});
+            }
+            previousMousePosition = {...event.mouse.position};
+        });
+
+        // // fit render viewport to the scene
+        // Render.lookAt(render, {
+        //     min: {x: 0, y: invisibleHeight},
+        //     max: {x: boxWidth, y: totalHeight}
+        // });
+
+        console.log(stack)
+
+
+    </script>
+</body>
+</html>
