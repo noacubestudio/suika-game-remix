@@ -75,18 +75,34 @@
         const runner = Runner.create();
         Runner.run(runner, engine);
 
+        // slowly drop stack
         lastTime = Common.now();
+        waitTicks = 10;
         Events.on(engine, 'beforeUpdate', (event) => {
+
             // apply every x ms
             if (Common.now() - lastTime >= 5) {
-                // do something here
+
                 const stackLowerEdge = stack.bodies[0].bounds.max.y
                 if (stackLowerEdge < dropArea) {
-                    Composite.translate(stack, {x: 0, y: 5});
+                    waitTicks--;
+                    if (waitTicks <= 0) Composite.translate(stack, {x: 0, y: 5});
+                } else {
+                    waitTicks = 10;
                 }
 
                 // update last time
                 lastTime = Common.now();
+            }
+
+            // grow
+            for (const body of world.bodies) {
+                if (body.growPercent < 1) {
+                    body.growPercent *= 2;
+                    Body.scale(body, 2, 2);
+                    body.render.sprite.xScale = 2 - body.growPercent;
+                    body.render.sprite.yScale = 2 - body.growPercent;
+                }
             }
         });
 
@@ -112,7 +128,7 @@
                 y: (bodyA.position.y + bodyB.position.y) / 2
             };
             Composite.remove(world, [bodyA, bodyB]);
-            const mergedSphere = newSphere(newPosition, sphereProperties[newIndex], false)
+            const mergedSphere = newSphere(newPosition, sphereProperties[newIndex], false, 0.25);
             Body.setAngle(mergedSphere, meanAngleFromTwo(bodyA.angle, bodyB.angle));
             Composite.add(world, mergedSphere);
         }
@@ -134,8 +150,8 @@
         const wallWidth = 20;
         Composite.add(world, [
             Bodies.rectangle(boxWidth/2, totalHeight, boxWidth, wallWidth, { isStatic: true, render: wallStyle }),
-            Bodies.rectangle(boxWidth, totalHeight-boxHeight/2, wallWidth, boxHeight, { isStatic: true, render: wallStyle }),
-            Bodies.rectangle(       0, totalHeight-boxHeight/2, wallWidth, boxHeight, { isStatic: true, render: wallStyle }),
+            Bodies.rectangle(boxWidth, totalHeight/2, wallWidth, totalHeight, { isStatic: true, render: wallStyle }),
+            Bodies.rectangle(       0, totalHeight/2, wallWidth, totalHeight, { isStatic: true, render: wallStyle }),
         ]);
 
         // set up all possible spheres as well as define the subset that can drop
@@ -152,8 +168,9 @@
             { stage:10, radius:100, points:178, density: 0.1, friction: 0.5 },
         ];
 
-        function newSphere(pos, pickedProperties, isStatic) {
-            return Bodies.circle(pos.x, pos.y, pickedProperties.radius, {
+        function newSphere(pos, pickedProperties, isStatic, growPercent) {
+            const startRadius = pickedProperties.radius;
+            const sphere = Bodies.circle(pos.x, pos.y, startRadius, {
                 density: pickedProperties.density,
                 friction: pickedProperties.friction,
                 restitution: 0.1,
@@ -161,9 +178,17 @@
                     sprite: { texture: './img/ball'+pickedProperties.stage+'.png' }
                 },
                 isStatic,
+                // collisionFilter: { group: -1 },
                 stage: pickedProperties.stage,
-                points: pickedProperties.points
+                points: pickedProperties.points,
             });
+            if (growPercent !== undefined) { 
+                Body.scale(sphere, growPercent, growPercent);
+                sphere.render.sprite.xScale = 2 - growPercent;
+                sphere.render.sprite.yScale = 2 - growPercent;
+                sphere.growPercent = growPercent; 
+            };
+            return sphere;
         }
 
         let sphereBag = [];
@@ -196,7 +221,7 @@
             Composite.add(dest, newSphere(pos, pickedProperties, true));
         }
 
-        function moveStack(newX) {
+        function moveStackX(newX) {
             for (const body of stack.bodies) {
                 Body.setPosition(body, {x: newX, y: body.position.y})
             }
@@ -229,15 +254,11 @@
 
         // let previousMousePosition = null;
         let mouseIsDown = false;
-        let dropHeightSinceLast = 0;
 
         Events.on(mouseConstraint, 'mousedown', (event) => {
             mouseIsDown = true;
-            if (dropHeightSinceLast > 0) {
-                // Composite.translate(stack, {x: 0, y: dropHeightSinceLast});
-                pushSphereFromBag(stack, bagNext()); 
-            }
-            moveStack(event.mouse.position.x);
+            pushSphereFromBag(stack, bagNext()); 
+            moveStackX(event.mouse.position.x);
         });
         Events.on(mouseConstraint, 'mouseup', () => {
             mouseIsDown = false;
@@ -247,17 +268,16 @@
                 if (lowestSphere !== undefined) {
                     Body.setStatic(lowestSphere, false);
                     Composite.move(stack, lowestSphere, world);
-                    dropHeightSinceLast = lowestSphere.circleRadius * 2;
                 }
             }
         });
 
         Events.on(mouseConstraint, 'mousemove', (event) => {
             // if (!mouseIsDown) return;
-            moveStack(event.mouse.position.x);
+            moveStackX(event.mouse.position.x);
         });
 
-        console.log(stack)
+        // console.log(stack)
     </script>
 
     <div id="score-text">0</div>
