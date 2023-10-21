@@ -41,8 +41,11 @@
             Bodies = Matter.Bodies,
             Body = Matter.Body;
 
+            const mergeSound = new Audio('pop1.wav');
+        
         // create engine
         const engine = Engine.create();
+        engine.gravity.scale = 0.0015;
         const world = engine.world;
 
         const dropArea = 100;
@@ -91,7 +94,7 @@
             const ctx = render.context;
             const gradient = ctx.createLinearGradient(0, 0, 0, dropArea);
             gradient.addColorStop(0, '#372440');
-            gradient.addColorStop(1, 'transparent');
+            gradient.addColorStop(1, '#37244000');
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, boxWidth, dropArea);
         });
@@ -101,6 +104,7 @@
             if (bodyA.stage === sphereProperties[sphereProperties.length-1].stage) return;
 
             score += bodyA.points;
+            mergeSound.play();
             document.getElementById('score-text').textContent = score;
             const newIndex = bodyA.stage;
             const newPosition = {
@@ -118,7 +122,7 @@
         Events.on(engine, 'collisionStart', (event) => {
             event.pairs.forEach((pair) => {
                 if (pair.bodyA.stage === pair.bodyB.stage && pair.bodyA.isStatic === pair.bodyB.isStatic) {
-                    collide(pair.bodyA, pair.bodyB)
+                    collide(pair.bodyA, pair.bodyB);
                 }
             });
         });
@@ -127,7 +131,7 @@
 
         // floor and walls
         const wallStyle = { fillStyle: '#F9F' };
-        const wallWidth = 10;
+        const wallWidth = 20;
         Composite.add(world, [
             Bodies.rectangle(boxWidth/2, totalHeight, boxWidth, wallWidth, { isStatic: true, render: wallStyle }),
             Bodies.rectangle(boxWidth, totalHeight-boxHeight/2, wallWidth, boxHeight, { isStatic: true, render: wallStyle }),
@@ -136,15 +140,15 @@
 
         // set up all possible spheres as well as define the subset that can drop
         const sphereProperties = [
-            { stage: 1, radius: 10, points:  2, density: 0.2, friction: 0.999, fill: '#ffffd9' },
-            { stage: 2, radius: 20, points:  4, density: 0.2, friction: 0.999, fill: '#edf8b1' },
-            { stage: 3, radius: 30, points:  6, density: 0.1, friction: 0.999, fill: '#c7e9b4' },
-            { stage: 4, radius: 40, points: 10, density: 0.1, friction: 0.999, fill: '#7fcdbb' },
-            { stage: 5, radius: 50, points: 16, density: 0.1, friction: 0.999, fill: '#41b6c4' },
-            { stage: 6, radius: 60, points: 26, density: 0.1, friction: 0.999, fill: '#1d91c0' },
-            { stage: 7, radius: 70, points: 42, density: 0.1, friction: 0.999, fill: '#225ea8' },
-            { stage: 8, radius: 80, points: 68, density: 0.1, friction: 0.999, fill: '#253494' },
-            { stage: 9, radius: 90, points:110, density: 0.1, friction: 0.999, fill: '#081d58' },
+            { stage: 1, radius: 10, points:  2, density: 0.2, friction: 0.5, fill: '#ffffd9' },
+            { stage: 2, radius: 20, points:  4, density: 0.2, friction: 0.5, fill: '#edf8b1' },
+            { stage: 3, radius: 30, points:  6, density: 0.1, friction: 0.5, fill: '#c7e9b4' },
+            { stage: 4, radius: 40, points: 10, density: 0.1, friction: 0.5, fill: '#7fcdbb' },
+            { stage: 5, radius: 50, points: 16, density: 0.1, friction: 0.5, fill: '#41b6c4' },
+            { stage: 6, radius: 60, points: 26, density: 0.1, friction: 0.5, fill: '#1d91c0' },
+            { stage: 7, radius: 70, points: 42, density: 0.1, friction: 0.5, fill: '#225ea8' },
+            { stage: 8, radius: 80, points: 68, density: 0.1, friction: 0.5, fill: '#253494' },
+            { stage: 9, radius: 90, points:110, density: 0.1, friction: 0.5, fill: '#081d58' },
         ];
 
         function newSphere(pos, pickedProperties, isStatic) {
