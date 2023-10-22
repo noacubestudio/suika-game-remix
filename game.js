@@ -3,17 +3,17 @@ const DROP_HEIGHT = 100;
 const PLAY_AREA_HEIGHT = 550;
 const PLAY_AREA_WIDTH = 500;
 const SPHERES_CONFIG = [
-    { stage: 1, radius: 14, points:  2, density: 0.15, friction: 0.5 },
-    { stage: 2, radius: 20, points:  4, density: 0.2, friction: 0.5 },
-    { stage: 3, radius: 30, points:  6, density: 0.1, friction: 0.5 },
-    { stage: 4, radius: 40, points: 10, density: 0.1, friction: 0.5 },
-    { stage: 5, radius: 54, points: 16, density: 0.1, friction: 0.5 },
-    { stage: 6, radius: 66, points: 26, density: 0.1, friction: 0.5 },
-    { stage: 7, radius: 80, points: 42, density: 0.1, friction: 0.5 },
-    { stage: 8, radius:100, points: 68, density: 0.1, friction: 0.5 },
-    { stage: 9, radius:120, points:110, density: 0.1, friction: 0.5 },
-    { stage:10, radius:140, points:500, density: 0.1, friction: 0.5 },
-    { stage:11, radius:160, points:999, density: 0.1, friction: 0.5 },
+    { stage: 1, radius: 14, points:  2, density: 0.3 , friction: 0.1, restitution: 0.4 },
+    { stage: 2, radius: 20, points:  4, density: 0.25, friction: 0.4, restitution: 0.3 },
+    { stage: 3, radius: 30, points:  6, density: 0.2 , friction: 0.4, restitution: 0.2 },
+    { stage: 4, radius: 40, points: 10, density: 0.2 , friction: 0.4, restitution: 0.2 },
+    { stage: 5, radius: 54, points: 16, density: 0.2 , friction: 0.5, restitution: 0.2 },
+    { stage: 6, radius: 66, points: 26, density: 0.2 , friction: 0.5, restitution: 0.2 },
+    { stage: 7, radius: 80, points: 42, density: 0.2 , friction: 0.6, restitution: 0.2 },
+    { stage: 8, radius:100, points: 68, density: 0.2 , friction: 0.7, restitution: 0.2 },
+    { stage: 9, radius:120, points:110, density: 0.2 , friction: 0.8, restitution: 0.2 },
+    { stage:10, radius:140, points:500, density: 0.2 , friction: 0.9, restitution: 0.2 },
+    { stage:11, radius:160, points:999, density: 0.2 , friction: 0.9, restitution: 0.2 },
 ];
 
 // load
@@ -34,7 +34,7 @@ const Engine = Matter.Engine,
 
 // create engine
 const engine = Engine.create();
-engine.gravity.scale = 0.0015; // 0.001 is default
+engine.gravity.scale = 0.0012; // 0.001 is default
 const world = engine.world;
 
 Common._seed = (() => {
@@ -89,6 +89,7 @@ render.mouse = mouse;
 // state
 let randomBag = [];
 const nextDrops = Composite.create();
+let dropScheduled = false;
 let ticksToNextDrop = 10;
 let score = 0;
 let lostGame = false;
@@ -118,6 +119,11 @@ Events.on(engine, 'beforeUpdate', (event) => {
 
         lastTickTime = Common.now();
     }
+
+    if (dropScheduled && nextDrops.bodies[0].bounds.max.y >= DROP_HEIGHT - 0.5) {
+        dropSphereFromStack();
+    }
+    dropScheduled = false;
 
     // grow
     for (const body of world.bodies) {
@@ -174,7 +180,7 @@ Events.on(mouseConstraint, 'mousedown', (event) => {
 Events.on(mouseConstraint, 'mouseup', () => {
     if (lostGame) return;
     mouseIsDown = false;
-    dropSphereFromStack()
+    dropScheduled = true;
 });
 
 Events.on(mouseConstraint, 'mousemove', (event) => {
@@ -226,6 +232,10 @@ function spheresCollided(bodyA, bodyB) {
         x: (bodyA.position.x + bodyB.position.x) / 2,
         y: (bodyA.position.y + bodyB.position.y) / 2
     };
+    const newVelocity = {
+        x: (bodyA.velocity.x + bodyB.velocity.x) / 2,
+        y: (bodyA.velocity.y + bodyB.velocity.y) / 2
+    }
     bodyA.removing = true; bodyB.removing = true;
 
     // console.log("REM!", (bodyA.stage-1) + " @" + bodyA.id);
@@ -234,6 +244,7 @@ function spheresCollided(bodyA, bodyB) {
     
     const mergedSphere = newSphere(newPosition, SPHERES_CONFIG[newIndex], false, 0.25);
     Body.setAngle(mergedSphere, meanAngleFromTwo(bodyA.angle, bodyB.angle));
+    Body.setVelocity(mergedSphere, newVelocity);
     // console.log("ADD!", newIndex + " @" + mergedSphere.id);
 
     Composite.add(world, mergedSphere);
@@ -256,7 +267,7 @@ function newSphere(pos, pickedProperties, isStatic, growPercent) {
     const sphere = Bodies.circle(pos.x, pos.y, startRadius, {
         density: pickedProperties.density,
         friction: pickedProperties.friction,
-        restitution: 0.1,
+        restitution: pickedProperties.restitution,
         render: { 
             sprite: { texture: './img/ball'+pickedProperties.stage+'.png' }
         },
