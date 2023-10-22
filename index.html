@@ -105,6 +105,7 @@
                     if (waitTicks <= 0) Composite.translate(stack, {x: 0, y: 5});
                 } else {
                     waitTicks = 10;
+                    if (stackLowerEdge !== dropArea) Composite.translate(stack, {x: 0, y: dropArea - stackLowerEdge});
                 }
 
                 // update last time
@@ -127,11 +128,11 @@
 
         Events.on(engine, 'afterUpdate', (event) => {
             const ctx = render.context;
-            const gradient = ctx.createLinearGradient(0, 0, 0, dropArea);
+            const gradient = ctx.createLinearGradient(0, 2, 0, dropArea);
             gradient.addColorStop(0, '#372440');
             gradient.addColorStop(1, '#37244000');
             ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, boxWidth, dropArea);
+            ctx.fillRect(0, -2, boxWidth, dropArea);
         });
 
         function collide(bodyA, bodyB) {
@@ -154,6 +155,7 @@
         
 
         let score = 0;
+        let lostGame = false;
         Events.on(engine, 'collisionStart', (event) => {
             event.pairs.forEach((pair) => {
                 if (pair.bodyA.stage === pair.bodyB.stage && pair.bodyA.isStatic === pair.bodyB.isStatic) {
@@ -161,6 +163,23 @@
                 }
             });
         });
+
+        Events.on(engine, 'collisionActive', (event) => {
+            event.pairs.forEach((pair) => {
+                if (pair.bodyA.isSensor && !pair.bodyB.isStatic) {
+                    pair.bodyB.dangerStartTime ||= Common.now();
+                    if (Common.now() - pair.bodyB.dangerStartTime > 1000) endGame();
+                } else if (pair.bodyB.isSensor && !pair.bodyA.isStatic) {
+                    pair.bodyA.dangerStartTime ||= Common.now();
+                    if (Common.now() - pair.bodyA.dangerStartTime > 1000) endGame();
+                }
+            });
+        });
+
+        function endGame() {
+            document.getElementById('score-text').style.color = '#55ee33';
+            lostGame = true;
+        }
 
         // scene code
 
@@ -172,6 +191,13 @@
             Bodies.rectangle(boxWidth, totalHeight/2, wallWidth, totalHeight, { isStatic: true, render: wallStyle }),
             Bodies.rectangle(       0, totalHeight/2, wallWidth, totalHeight, { isStatic: true, render: wallStyle }),
         ]);
+
+        // sensor - anything that collided before cant touch this
+        Composite.add(world, Bodies.rectangle(boxWidth/2, dropArea/2, boxWidth, dropArea, {
+            isStatic: true,
+            isSensor: true,
+            render: { fillStyle: '#FF99FF30' }
+        }))
 
         // set up all possible spheres as well as define the subset that can drop
         const sphereProperties = [
@@ -276,11 +302,13 @@
         let mouseIsDown = false;
 
         Events.on(mouseConstraint, 'mousedown', (event) => {
+            if (lostGame) return;
             mouseIsDown = true;
             pushSphereFromBag(stack, bagNext()); 
             moveStackX(event.mouse.position.x);
         });
         Events.on(mouseConstraint, 'mouseup', () => {
+            if (lostGame) return;
             mouseIsDown = false;
             if (stack.bodies.length > 0) {
                 const lowestSphere = stack.bodies[0];
@@ -293,6 +321,7 @@
         });
 
         Events.on(mouseConstraint, 'mousemove', (event) => {
+            if (lostGame) return;
             // if (!mouseIsDown) return;
             moveStackX(event.mouse.position.x);
         });
