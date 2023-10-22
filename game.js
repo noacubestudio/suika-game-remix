@@ -277,8 +277,8 @@ function newSphere(pos, pickedProperties, isStatic, growPercent) {
 
 function bagNext() {
     if (randomBag.length === 0) {
-        //randomBag = Common.shuffle(SPHERES_CONFIG.slice(0, 4));
-        randomBag = Common.shuffle(SPHERES_CONFIG.slice(7, 8));
+        randomBag = Common.shuffle(SPHERES_CONFIG.slice(0, 4));
+        //randomBag = Common.shuffle(SPHERES_CONFIG.slice(7, 8));
     }
     return randomBag.shift();
 }
