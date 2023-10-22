@@ -37,6 +37,15 @@ const engine = Engine.create();
 engine.gravity.scale = 0.0015; // 0.001 is default
 const world = engine.world;
 
+Common._seed = (() => {
+    
+    const d = new Date();
+    const fulldate = d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate();
+    const currentHour = d.getHours();
+    return fulldate * 100 + currentHour;
+})();
+document.getElementById('seed').textContent = "Seed " + Common._seed;
+
 // create renderer
 const render = Render.create({
     canvas: document.getElementById('canvas-container'),
