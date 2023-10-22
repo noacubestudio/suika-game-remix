@@ -53,7 +53,7 @@ const render = Render.create({
     options: {
         width: PLAY_AREA_WIDTH,
         height: PLAY_AREA_HEIGHT + DROP_HEIGHT,
-        background: '#372440',
+        background: '#4A1D60',
         wireframes: false,
         // showCollisions: true,
         // showDebug: true,
@@ -136,8 +136,8 @@ Events.on(engine, 'beforeUpdate', (event) => {
 Events.on(engine, 'afterUpdate', (event) => {
     const ctx = render.context;
     const gradient = ctx.createLinearGradient(0, 2, 0, DROP_HEIGHT);
-    gradient.addColorStop(0, '#372440');
-    gradient.addColorStop(1, '#37244000');
+    gradient.addColorStop(0, '#201624');
+    gradient.addColorStop(1, '#20162400');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_HEIGHT);
 });
@@ -190,16 +190,16 @@ function sceneSetup() {
     const wallWidth = 20;
     const totalHeight = PLAY_AREA_HEIGHT + DROP_HEIGHT;
     Composite.add(world, [
-        Bodies.rectangle(PLAY_AREA_WIDTH/2, totalHeight, PLAY_AREA_WIDTH, wallWidth, { isStatic: true, render: wallStyle }),
-        Bodies.rectangle(PLAY_AREA_WIDTH, totalHeight/2, wallWidth, totalHeight, { isStatic: true, render: wallStyle }),
-        Bodies.rectangle(       0, totalHeight/2, wallWidth, totalHeight, { isStatic: true, render: wallStyle }),
+        Bodies.rectangle(PLAY_AREA_WIDTH/2, totalHeight + wallWidth/2, PLAY_AREA_WIDTH, wallWidth, { isStatic: true, render: wallStyle }),
+        Bodies.rectangle(PLAY_AREA_WIDTH + wallWidth/2, totalHeight/2, wallWidth, totalHeight, { isStatic: true, render: wallStyle }),
+        Bodies.rectangle(       - wallWidth/2, totalHeight/2, wallWidth, totalHeight, { isStatic: true, render: wallStyle }),
     ]);
 
     // sensor - anything that collided before cant touch this
-    Composite.add(world, Bodies.rectangle(PLAY_AREA_WIDTH/2, DROP_HEIGHT/2, PLAY_AREA_WIDTH, DROP_HEIGHT, {
+    Composite.add(world, Bodies.rectangle(PLAY_AREA_WIDTH/2, DROP_HEIGHT/2, PLAY_AREA_WIDTH+8, DROP_HEIGHT, {
         isStatic: true,
         isSensor: true,
-        render: { fillStyle: '#FF99FF30' }
+        render: { strokeStyle: '#201624', fillStyle: '#20162450', lineWidth: '2' }
     }));
 
     // init stack of static spheres
@@ -277,8 +277,8 @@ function newSphere(pos, pickedProperties, isStatic, growPercent) {
 
 function bagNext() {
     if (randomBag.length === 0) {
-        randomBag = Common.shuffle(SPHERES_CONFIG.slice(0, 4));
-        // randomBag = Common.shuffle(SPHERES_CONFIG.slice(7, 8));
+        //randomBag = Common.shuffle(SPHERES_CONFIG.slice(0, 4));
+        randomBag = Common.shuffle(SPHERES_CONFIG.slice(7, 8));
     }
     return randomBag.shift();
 }
@@ -306,7 +306,7 @@ function pushSphereFromBag(dest, pickedProperties) {
 }
 
 function moveStackX(newX) {
-    const bounds = 50;
+    const bounds = 40;
     newX = Math.max(newX, bounds);
     newX = Math.min(newX, PLAY_AREA_WIDTH - bounds);
 
