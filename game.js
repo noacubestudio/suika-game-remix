@@ -142,8 +142,8 @@ Events.on(engine, 'beforeUpdate', (event) => {
 Events.on(engine, 'afterUpdate', (event) => {
     const ctx = render.context;
     const gradient = ctx.createLinearGradient(0, 2, 0, DROP_HEIGHT);
-    gradient.addColorStop(0, '#201624');
-    gradient.addColorStop(1, '#20162400');
+    gradient.addColorStop(0, '#20082E');
+    gradient.addColorStop(1, '#20082E00');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_HEIGHT);
 });
@@ -205,7 +205,7 @@ function sceneSetup() {
     Composite.add(world, Bodies.rectangle(PLAY_AREA_WIDTH/2, DROP_HEIGHT/2, PLAY_AREA_WIDTH+8, DROP_HEIGHT, {
         isStatic: true,
         isSensor: true,
-        render: { strokeStyle: '#201624', fillStyle: '#20162450', lineWidth: '2' }
+        render: { strokeStyle: '#20082E', fillStyle: '#20082E50', lineWidth: '2' }
     }));
 
     // init stack of static spheres
