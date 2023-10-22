@@ -1,6 +1,6 @@
 // config
 const DROP_HEIGHT = 100;
-const PLAY_AREA_HEIGHT = 500;
+const PLAY_AREA_HEIGHT = 550;
 const PLAY_AREA_WIDTH = 500;
 const SPHERES_CONFIG = [
     { stage: 1, radius: 14, points:  2, density: 0.15, friction: 0.5 },
@@ -12,8 +12,8 @@ const SPHERES_CONFIG = [
     { stage: 7, radius: 80, points: 42, density: 0.1, friction: 0.5 },
     { stage: 8, radius:100, points: 68, density: 0.1, friction: 0.5 },
     { stage: 9, radius:120, points:110, density: 0.1, friction: 0.5 },
-    { stage:10, radius:140, points:178, density: 0.1, friction: 0.5 },
-    { stage:11, radius:160, points:1000, density: 0.1, friction: 0.5 },
+    { stage:10, radius:140, points:500, density: 0.1, friction: 0.5 },
+    { stage:11, radius:160, points:999, density: 0.1, friction: 0.5 },
 ];
 
 // load
@@ -165,14 +165,7 @@ Events.on(mouseConstraint, 'mousedown', (event) => {
 Events.on(mouseConstraint, 'mouseup', () => {
     if (lostGame) return;
     mouseIsDown = false;
-    if (nextDrops.bodies.length > 0) {
-        const lowestSphere = nextDrops.bodies[0];
-        
-        if (lowestSphere !== undefined) {
-            Body.setStatic(lowestSphere, false);
-            Composite.move(nextDrops, lowestSphere, world);
-        }
-    }
+    dropSphereFromStack()
 });
 
 Events.on(mouseConstraint, 'mousemove', (event) => {
@@ -225,10 +218,28 @@ function spheresCollided(bodyA, bodyB) {
         y: (bodyA.position.y + bodyB.position.y) / 2
     };
     bodyA.removing = true; bodyB.removing = true;
+
+    // console.log("REM!", (bodyA.stage-1) + " @" + bodyA.id);
+    // console.log("REM!", (bodyB.stage-1) + " @" + bodyB.id);
     Composite.remove(world, [bodyA, bodyB]);
+    
     const mergedSphere = newSphere(newPosition, SPHERES_CONFIG[newIndex], false, 0.25);
     Body.setAngle(mergedSphere, meanAngleFromTwo(bodyA.angle, bodyB.angle));
+    // console.log("ADD!", newIndex + " @" + mergedSphere.id);
+
     Composite.add(world, mergedSphere);
+}
+
+function dropSphereFromStack() {
+    if (nextDrops.bodies.length > 0) {
+        const lowestSphere = nextDrops.bodies[0];
+        
+        if (lowestSphere !== undefined) {
+            Body.setStatic(lowestSphere, false);
+            Composite.move(nextDrops, lowestSphere, world);
+            // console.log('-', (lowestSphere.stage-1) + " @" + lowestSphere.id, '-');
+        }
+    }
 }
 
 function newSphere(pos, pickedProperties, isStatic, growPercent) {
@@ -239,7 +250,6 @@ function newSphere(pos, pickedProperties, isStatic, growPercent) {
         restitution: 0.1,
         render: { 
             sprite: { texture: './img/ball'+pickedProperties.stage+'.png' }
-            // fillStyle: 'hsl(20, 80%,'+pickedProperties.stage * 5 + 40+'%)'
         },
         isStatic,
         // collisionFilter: { group: -1 },
@@ -259,6 +269,7 @@ function newSphere(pos, pickedProperties, isStatic, growPercent) {
 function bagNext() {
     if (randomBag.length === 0) {
         randomBag = Common.shuffle(SPHERES_CONFIG.slice(0, 4));
+        // randomBag = Common.shuffle(SPHERES_CONFIG.slice(7, 8));
     }
     return randomBag.shift();
 }
