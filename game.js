@@ -3,7 +3,7 @@ const DROP_HEIGHT = 100;
 const PLAY_AREA_HEIGHT = 500;
 const PLAY_AREA_WIDTH = 500;
 const SPHERES_CONFIG = [
-    { stage: 1, radius: 14, points:  2, density: 0.3, friction: 0.5 },
+    { stage: 1, radius: 14, points:  2, density: 0.15, friction: 0.5 },
     { stage: 2, radius: 20, points:  4, density: 0.2, friction: 0.5 },
     { stage: 3, radius: 30, points:  6, density: 0.1, friction: 0.5 },
     { stage: 4, radius: 40, points: 10, density: 0.1, friction: 0.5 },
@@ -284,6 +284,10 @@ function pushSphereFromBag(dest, pickedProperties) {
 }
 
 function moveStackX(newX) {
+    const bounds = 50;
+    newX = Math.max(newX, bounds);
+    newX = Math.min(newX, PLAY_AREA_WIDTH - bounds);
+
     for (const body of nextDrops.bodies) {
         Body.setPosition(body, {x: newX, y: body.position.y})
     }
