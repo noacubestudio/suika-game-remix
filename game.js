@@ -78,7 +78,7 @@ render.mouse = mouse;
 
 
 // state
-const randomBag = [];
+let randomBag = [];
 const nextDrops = Composite.create();
 let ticksToNextDrop = 10;
 let score = 0;
@@ -158,7 +158,7 @@ Events.on(engine, 'collisionActive', (event) => {
 Events.on(mouseConstraint, 'mousedown', (event) => {
     if (lostGame) return;
     mouseIsDown = true;
-    pushSphereFromBag(nextDrops, bagNext(randomBag)); 
+    pushSphereFromBag(nextDrops, bagNext()); 
     moveStackX(event.mouse.position.x);
 });
 
@@ -202,7 +202,7 @@ function sceneSetup() {
 
     // init stack of static spheres
     for (let i = 0; i < 4; i++) {
-        pushSphereFromBag(nextDrops, bagNext(randomBag)); 
+        pushSphereFromBag(nextDrops, bagNext()); 
     }
     Composite.add(world, nextDrops);
 }
@@ -214,6 +214,7 @@ function endGame() {
 
 function spheresCollided(bodyA, bodyB) {
     if (bodyA.stage === SPHERES_CONFIG[SPHERES_CONFIG.length-1].stage) return;
+    if (bodyA.removing || bodyB.removing) return;
 
     score += bodyA.points;
     mergeSound.play();
@@ -223,6 +224,7 @@ function spheresCollided(bodyA, bodyB) {
         x: (bodyA.position.x + bodyB.position.x) / 2,
         y: (bodyA.position.y + bodyB.position.y) / 2
     };
+    bodyA.removing = true; bodyB.removing = true;
     Composite.remove(world, [bodyA, bodyB]);
     const mergedSphere = newSphere(newPosition, SPHERES_CONFIG[newIndex], false, 0.25);
     Body.setAngle(mergedSphere, meanAngleFromTwo(bodyA.angle, bodyB.angle));
@@ -254,11 +256,11 @@ function newSphere(pos, pickedProperties, isStatic, growPercent) {
 }
 
 
-function bagNext(bag) {
-    if (bag.length === 0) {
-        bag = Common.shuffle(SPHERES_CONFIG.slice(0, 4));
+function bagNext() {
+    if (randomBag.length === 0) {
+        randomBag = Common.shuffle(SPHERES_CONFIG.slice(0, 4));
     }
-    return bag.shift();
+    return randomBag.shift();
 }
 
 function meanAngleFromTwo(radA, radB) {
