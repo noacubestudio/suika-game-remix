@@ -3,10 +3,10 @@ const DROP_HEIGHT = 100;
 const PLAY_AREA_HEIGHT = 550;
 const PLAY_AREA_WIDTH = 500;
 const SPHERES_CONFIG = [
-    { stage: 1, radius: 14, points:  2, density: 0.3 , friction: 0.1, restitution: 0.4 },
-    { stage: 2, radius: 20, points:  4, density: 0.25, friction: 0.4, restitution: 0.3 },
-    { stage: 3, radius: 30, points:  6, density: 0.2 , friction: 0.4, restitution: 0.2 },
-    { stage: 4, radius: 40, points: 10, density: 0.2 , friction: 0.4, restitution: 0.2 },
+    { stage: 1, radius: 14, points:  2, density: 0.3 , friction: 0.1, restitution: 0.4, sound: new Audio('woosh-01.wav') },
+    { stage: 2, radius: 20, points:  4, density: 0.25, friction: 0.4, restitution: 0.3, sound: new Audio('woosh-02.wav') },
+    { stage: 3, radius: 30, points:  6, density: 0.2 , friction: 0.4, restitution: 0.2, sound: new Audio('woosh-03.wav') },
+    { stage: 4, radius: 40, points: 10, density: 0.2 , friction: 0.4, restitution: 0.2, sound: new Audio('woosh-04.wav') },
     { stage: 5, radius: 54, points: 16, density: 0.2 , friction: 0.5, restitution: 0.2 },
     { stage: 6, radius: 66, points: 26, density: 0.2 , friction: 0.5, restitution: 0.2 },
     { stage: 7, radius: 80, points: 42, density: 0.2 , friction: 0.6, restitution: 0.2 },
@@ -256,6 +256,7 @@ function dropSphereFromStack() {
         
         if (lowestSphere !== undefined) {
             Body.setStatic(lowestSphere, false);
+            if (lowestSphere.sound !== undefined) lowestSphere.sound.play();
             Composite.move(nextDrops, lowestSphere, world);
             // console.log('-', (lowestSphere.stage-1) + " @" + lowestSphere.id, '-');
         }
@@ -275,6 +276,7 @@ function newSphere(pos, pickedProperties, isStatic, growPercent) {
         // collisionFilter: { group: -1 },
         stage: pickedProperties.stage,
         points: pickedProperties.points,
+        sound: pickedProperties.sound
     });
     if (growPercent !== undefined) { 
         Body.scale(sphere, growPercent, growPercent);
