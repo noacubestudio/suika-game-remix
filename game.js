@@ -67,22 +67,7 @@ Render.run(render);
 const runner = Runner.create();
 Runner.run(runner, engine);
 
-// add mouse control
-const mouse = Mouse.create(render.canvas);
-const mouseConstraint = MouseConstraint.create(engine, {
-    mouse: mouse,
-    constraint: {
-        stiffness: 0.2,
-        render: {
-            visible: true
-        }
-    },
-    collisionFilter: { mask: 0x002 }
-});
-Composite.add(world, mouseConstraint);
 
-// keep mouse in sync with rendering
-render.mouse = mouse;
 
 
 
@@ -91,6 +76,7 @@ render.mouse = mouse;
 let randomBag = [];
 const nextDrops = Composite.create();
 let dropScheduled = false;
+let scheduledMerges = [];
 let ticksToNextDrop = 10;
 let score = 0;
 let lostGame = false;
@@ -105,6 +91,9 @@ sceneSetup();
 
 // slowly drop stack
 Events.on(engine, 'beforeUpdate', (event) => {
+
+    // do merges
+    doPlannedMerges(scheduledMerges);
 
     // apply every x ms
     if (Common.now() >= lastTickTime + 1) {
@@ -261,14 +250,32 @@ function spheresCollided(bodyA, bodyB) {
 
     // console.log("REM!", (bodyA.stage-1) + " @" + bodyA.id);
     // console.log("REM!", (bodyB.stage-1) + " @" + bodyB.id);
-    Composite.remove(world, [bodyA, bodyB]);
+    // Composite.remove(world, [bodyA]);
+    // Composite.remove(world, [bodyB]);
     
     const mergedSphere = newSphere(newPosition, SPHERES_CONFIG[newIndex], false, 0.25);
     Body.setAngle(mergedSphere, meanAngleFromTwo(bodyA.angle, bodyB.angle));
     Body.setVelocity(mergedSphere, newVelocity);
     // console.log("ADD!", newIndex + " @" + mergedSphere.id);
 
-    Composite.add(world, mergedSphere);
+    // Composite.add(world, mergedSphere);
+
+    scheduledMerges.push({rem1: bodyA, rem2: bodyB, add: mergedSphere});
+}
+
+function doPlannedMerges(mergesArray) {
+    mergesArray.forEach((bodiesGroup) => {
+
+        // console.log("before", world.bodies.map((body) => {return body.id} ));
+        
+        Composite.remove(world, bodiesGroup.rem1);
+        Composite.remove(world, bodiesGroup.rem2);
+        Composite.add(world, bodiesGroup.add);
+
+        // console.log("rem", bodiesGroup.rem1.id, bodiesGroup.rem2.id, "add", bodiesGroup.add.id);
+        // console.log("after", world.bodies.map((body) => {return body.id} ));
+    });
+    mergesArray.length = 0;
 }
 
 function dropSphereFromStack() {
