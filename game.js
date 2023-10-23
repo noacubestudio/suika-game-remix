@@ -47,8 +47,9 @@ Common._seed = (() => {
 document.getElementById('seed').textContent = "Seed " + Common._seed;
 
 // create renderer
+const canvas = document.getElementById('canvas-container');
 const render = Render.create({
-    canvas: document.getElementById('canvas-container'),
+    canvas: canvas,
     engine: engine,
     options: {
         width: PLAY_AREA_WIDTH,
@@ -95,7 +96,7 @@ let score = 0;
 let lostGame = false;
 let lastTickTime = Common.now();
 // input
-let mouseIsDown = false;
+let isTouching = false;
 
 
 sceneSetup();
@@ -170,23 +171,43 @@ Events.on(engine, 'collisionActive', (event) => {
     });
 });
 
-Events.on(mouseConstraint, 'mousedown', (event) => {
+// mouse/touch events
+document.addEventListener('mousedown', startedTouch);
+document.addEventListener('touchstart', startedTouch);
+document.addEventListener('mousemove', movedTouch);
+document.addEventListener('touchmove', movedTouch);
+document.addEventListener('mouseup', endedTouch);
+document.addEventListener('touchend', endedTouch);
+
+function startedTouch(event) {
+    event.preventDefault();
     if (lostGame) return;
-    mouseIsDown = true;
+    isTouching = true;
+
     pushSphereFromBag(nextDrops, bagNext()); 
-    moveStackX(event.mouse.position.x);
-});
 
-Events.on(mouseConstraint, 'mouseup', () => {
+    const pos = (event.touches !== undefined) ? event.touches[0] : event;
+    const rect = canvas.getBoundingClientRect();
+    const scaledX = (pos.clientX - rect.left) / rect.width;
+    moveStackX(scaledX * PLAY_AREA_WIDTH);
+}
+
+function movedTouch(event) {
+    event.preventDefault();
     if (lostGame) return;
-    mouseIsDown = false;
+
+    const pos = (event.touches !== undefined) ? event.touches[0] : event;
+    const rect = canvas.getBoundingClientRect();
+    const scaledX = (pos.clientX - rect.left) / rect.width;
+    moveStackX(scaledX * PLAY_AREA_WIDTH);
+}
+
+function endedTouch(event) {
+    if (lostGame) return;
+    isTouching = false;
+
     dropScheduled = true;
-});
-
-Events.on(mouseConstraint, 'mousemove', (event) => {
-    if (lostGame) return;
-    moveStackX(event.mouse.position.x);
-});
+}
 
 
 
