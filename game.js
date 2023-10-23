@@ -15,6 +15,7 @@ const SPHERES_CONFIG = [
     { stage:10, radius:140, points:500, density: 0.2 , friction: 0.3, restitution: 0.2 },
     { stage:11, radius:160, points:999, density: 0.2 , friction: 0.3, restitution: 0.2 },
 ];
+const MS_UNTIL_LOST = 2000;
 
 // load
 const mergeSound = new Audio('pop1.wav');
@@ -163,9 +164,9 @@ Events.on(engine, 'collisionStart', (event) => {
 Events.on(engine, 'collisionActive', (event) => {
     event.pairs.forEach((pair) => {
         if (pair.bodyA.isSensor && !pair.bodyB.isStatic) {
-            if (Common.now() - pair.bodyB.dangerStartTime > 1600) endGame();
+            if (Common.now() - pair.bodyB.dangerStartTime > MS_UNTIL_LOST) endGame();
         } else if (pair.bodyB.isSensor && !pair.bodyA.isStatic) {
-            if (Common.now() - pair.bodyA.dangerStartTime > 1600) endGame();
+            if (Common.now() - pair.bodyA.dangerStartTime > MS_UNTIL_LOST) endGame();
         }
     });
 });
