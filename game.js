@@ -138,7 +138,7 @@ Events.on(engine, 'afterUpdate', (event) => {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_HEIGHT);
 
-    if (!lostGame && !dropScheduled) {
+    if (!lostGame && nextDrops.bodies[0].bounds.max.y >= DROP_HEIGHT - 0.5) {
         gradient = ctx.createLinearGradient(0, DROP_HEIGHT, 0, PLAY_AREA_HEIGHT);
         gradient.addColorStop(0, '#DDE5A700');
         gradient.addColorStop(1, '#DDE5A710');
