@@ -163,9 +163,9 @@ Events.on(engine, 'collisionStart', (event) => {
 Events.on(engine, 'collisionActive', (event) => {
     event.pairs.forEach((pair) => {
         if (pair.bodyA.isSensor && !pair.bodyB.isStatic) {
-            if (Common.now() - pair.bodyB.dangerStartTime > 1000) endGame();
+            if (Common.now() - pair.bodyB.dangerStartTime > 1600) endGame();
         } else if (pair.bodyB.isSensor && !pair.bodyA.isStatic) {
-            if (Common.now() - pair.bodyA.dangerStartTime > 1000) endGame();
+            if (Common.now() - pair.bodyA.dangerStartTime > 1600) endGame();
         }
     });
 });
