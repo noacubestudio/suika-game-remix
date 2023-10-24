@@ -3,18 +3,19 @@ const DROP_HEIGHT = 100;
 const PLAY_AREA_HEIGHT = 550;
 const PLAY_AREA_WIDTH = 500;
 const SPHERES_CONFIG = [
-    { stage: 1, radius: 14, points:  2, density: 0.3 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-01.wav') },
-    { stage: 2, radius: 20, points:  4, density: 0.25, friction: 0.2, restitution: 0.15, sound: new Audio('woosh-02.wav') },
-    { stage: 3, radius: 30, points:  6, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-03.wav') },
-    { stage: 4, radius: 40, points: 10, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-04.wav') },
-    { stage: 5, radius: 54, points: 16, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-01.wav') },
-    { stage: 6, radius: 66, points: 26, density: 0.2 , friction: 0.2, restitution: 0.15 },
-    { stage: 7, radius: 80, points: 42, density: 0.2 , friction: 0.2, restitution: 0.15 },
-    { stage: 8, radius:100, points: 68, density: 0.2 , friction: 0.2, restitution: 0.15 },
-    { stage: 9, radius:120, points:110, density: 0.2 , friction: 0.2, restitution: 0.15 },
-    { stage:10, radius:140, points:500, density: 0.2 , friction: 0.2, restitution: 0.15 },
-    { stage:11, radius:160, points:999, density: 0.2 , friction: 0.2, restitution: 0.15 },
+    { stage:  1, radius:  14, points:   2, density: 0.3 , friction: 0.2 , restitution: 0.15, sound: new Audio('woosh-01.wav') },
+    { stage:  2, radius:  20, points:   4, density: 0.25, friction: 0.2 , restitution: 0.15, sound: new Audio('woosh-02.wav') },
+    { stage:  3, radius:  30, points:   6, density: 0.2 , friction: 0.2 , restitution: 0.15, sound: new Audio('woosh-03.wav') },
+    { stage:  4, radius:  40, points:  10, density: 0.2 , friction: 0.2 , restitution: 0.15, sound: new Audio('woosh-04.wav') },
+    { stage:  5, radius:  54, points:  16, density: 0.2 , friction: 0.2 , restitution: 0.15, sound: new Audio('woosh-01.wav') },
+    { stage:  6, radius:  66, points:  26, density: 0.2 , friction: 0.15, restitution: 0.15 },
+    { stage:  7, radius:  80, points:  42, density: 0.2 , friction: 0.15, restitution: 0.15 },
+    { stage:  8, radius: 100, points:  68, density: 0.2 , friction: 0.15, restitution: 0.15 },
+    { stage:  9, radius: 120, points: 110, density: 0.2 , friction: 0.1 , restitution: 0.15 },
+    { stage: 10, radius: 140, points: 500, density: 0.2 , friction: 0.1 , restitution: 0.15 },
+    { stage: 11, radius: 160, points: 999, density: 0.2 , friction: 0.1 , restitution: 0.15 },
 ];
+const BAG_ITEM_COUNT = 5;
 const MS_UNTIL_LOST = 2000;
 
 // load
@@ -79,7 +80,7 @@ const nextDrops = Composite.create();
 let dropScheduled = false;
 let scheduledMerges = [];
 let ticksToNextDrop = 10;
-let stackX = null;
+let stackX = PLAY_AREA_WIDTH / 2;
 let score = 0;
 let lostGame = false;
 let lastTickTime = Common.now();
@@ -237,7 +238,7 @@ function sceneSetup() {
     }));
 
     // init stack of static spheres
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < BAG_ITEM_COUNT; i++) {
         pushSphereFromBag(nextDrops, bagNext()); 
     }
     Composite.add(world, nextDrops);
@@ -336,8 +337,7 @@ function newSphere(pos, pickedProperties, isStatic, growPercent) {
 
 function bagNext() {
     if (randomBag.length === 0) {
-        randomBag = Common.shuffle(SPHERES_CONFIG.slice(0, 4));
-        //randomBag = Common.shuffle(SPHERES_CONFIG.slice(7, 8));
+        randomBag = Common.shuffle(SPHERES_CONFIG.slice(0, BAG_ITEM_COUNT));
     }
     return randomBag.shift();
 }
