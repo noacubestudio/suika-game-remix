@@ -7,7 +7,7 @@ const SPHERES_CONFIG = [
     { stage: 2, radius: 20, points:  4, density: 0.25, friction: 0.2, restitution: 0.15, sound: new Audio('woosh-02.wav') },
     { stage: 3, radius: 30, points:  6, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-03.wav') },
     { stage: 4, radius: 40, points: 10, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-04.wav') },
-    { stage: 5, radius: 54, points: 16, density: 0.2 , friction: 0.2, restitution: 0.15 },
+    { stage: 5, radius: 54, points: 16, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-01.wav') },
     { stage: 6, radius: 66, points: 26, density: 0.2 , friction: 0.2, restitution: 0.15 },
     { stage: 7, radius: 80, points: 42, density: 0.2 , friction: 0.2, restitution: 0.15 },
     { stage: 8, radius:100, points: 68, density: 0.2 , friction: 0.2, restitution: 0.15 },
@@ -87,6 +87,7 @@ let lastTickTime = Common.now();
 let isTouching = false;
 
 
+// walls, sensor at the top
 sceneSetup();
 
 
@@ -172,16 +173,20 @@ Events.on(engine, 'collisionActive', (event) => {
 });
 
 // mouse/touch events
-document.addEventListener('mousedown', startedTouch);
 document.addEventListener('touchstart', startedTouch);
-document.addEventListener('mousemove', movedTouch);
 document.addEventListener('touchmove', movedTouch);
-document.addEventListener('mouseup', endedTouch);
 document.addEventListener('touchend', endedTouch);
+let usingTouchDevice = undefined;
+document.addEventListener('mousedown', startedTouch);
+document.addEventListener('mousemove', movedTouch);
+document.addEventListener('mouseup', endedTouch);
+
 
 function startedTouch(event) {
     event.preventDefault();
     if (lostGame) return;
+    if (event.type === 'touchstart') usingTouchDevice = true;
+    if (event.type === 'mousedown' && usingTouchDevice) return;
     isTouching = true;
 
     pushSphereFromBag(nextDrops, bagNext()); 
@@ -194,6 +199,7 @@ function startedTouch(event) {
 
 function movedTouch(event) {
     event.preventDefault();
+    if (event.type === 'mousemove' && usingTouchDevice) return;
     if (lostGame) return;
 
     const pos = (event.touches !== undefined) ? event.touches[0] : event;
@@ -204,6 +210,7 @@ function movedTouch(event) {
 
 function endedTouch(event) {
     if (lostGame) return;
+    if (event.type === 'mouseup' && usingTouchDevice) return;
     isTouching = false;
 
     dropScheduled = true;
@@ -214,7 +221,7 @@ function endedTouch(event) {
 function sceneSetup() {
     // floor and walls
     const wallStyle = { fillStyle: '#F9F' };
-    const wallWidth = 20;
+    const wallWidth = 40;
     const totalHeight = PLAY_AREA_HEIGHT + DROP_HEIGHT;
     Composite.add(world, [
         Bodies.rectangle(PLAY_AREA_WIDTH/2, totalHeight + wallWidth/2, PLAY_AREA_WIDTH, wallWidth, { isStatic: true, render: wallStyle }),
