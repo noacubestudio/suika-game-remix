@@ -3,17 +3,17 @@ const DROP_HEIGHT = 100;
 const PLAY_AREA_HEIGHT = 550;
 const PLAY_AREA_WIDTH = 500;
 const SPHERES_CONFIG = [
-    { stage:  1, radius:  14, points:   2, density: 0.3 , friction: 0.2 , restitution: 0.15, sound: new Audio('woosh-01.wav') },
-    { stage:  2, radius:  20, points:   4, density: 0.25, friction: 0.2 , restitution: 0.15, sound: new Audio('woosh-02.wav') },
-    { stage:  3, radius:  30, points:   6, density: 0.2 , friction: 0.2 , restitution: 0.15, sound: new Audio('woosh-03.wav') },
-    { stage:  4, radius:  40, points:  10, density: 0.2 , friction: 0.2 , restitution: 0.15, sound: new Audio('woosh-04.wav') },
-    { stage:  5, radius:  54, points:  16, density: 0.2 , friction: 0.2 , restitution: 0.15, sound: new Audio('woosh-01.wav') },
-    { stage:  6, radius:  66, points:  26, density: 0.2 , friction: 0.15, restitution: 0.15 },
-    { stage:  7, radius:  80, points:  42, density: 0.2 , friction: 0.15, restitution: 0.15 },
-    { stage:  8, radius: 100, points:  68, density: 0.2 , friction: 0.15, restitution: 0.15 },
-    { stage:  9, radius: 120, points: 110, density: 0.2 , friction: 0.1 , restitution: 0.15 },
-    { stage: 10, radius: 140, points: 500, density: 0.2 , friction: 0.1 , restitution: 0.15 },
-    { stage: 11, radius: 160, points: 999, density: 0.2 , friction: 0.1 , restitution: 0.15 },
+    { stage:  1, radius:  14, points:   2, density: 0.3 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-01.wav') },
+    { stage:  2, radius:  20, points:   4, density: 0.25, friction: 0.2, restitution: 0.15, sound: new Audio('woosh-02.wav') },
+    { stage:  3, radius:  30, points:   6, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-03.wav') },
+    { stage:  4, radius:  40, points:  10, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-04.wav') },
+    { stage:  5, radius:  54, points:  16, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-01.wav') },
+    { stage:  6, radius:  66, points:  26, density: 0.2 , friction: 0.2, restitution: 0.15 },
+    { stage:  7, radius:  80, points:  42, density: 0.2 , friction: 0.2, restitution: 0.15 },
+    { stage:  8, radius: 100, points:  68, density: 0.2 , friction: 0.2, restitution: 0.15 },
+    { stage:  9, radius: 120, points: 110, density: 0.2 , friction: 0.2, restitution: 0.15 },
+    { stage: 10, radius: 140, points: 500, density: 0.2 , friction: 0.2, restitution: 0.15 },
+    { stage: 11, radius: 160, points: 999, density: 0.2 , friction: 0.2, restitution: 0.15 },
 ];
 const BAG_ITEM_COUNT = 5;
 const MS_UNTIL_LOST = 2000;
@@ -250,36 +250,44 @@ function endGame() {
 }
 
 function spheresCollided(bodyA, bodyB) {
+    // final stage cant merge
     if (bodyA.stage === SPHERES_CONFIG[SPHERES_CONFIG.length-1].stage) return;
+
+    // already merging
     if (bodyA.removing || bodyB.removing) return;
 
-    score += bodyA.points;
     mergeSound.play();
+
+    score += bodyA.points;
     document.getElementById('score-text').textContent = score;
+
     const newIndex = bodyA.stage;
-    const newPosition = {
-        x: (bodyA.position.x + bodyB.position.x) / 2,
-        y: (bodyA.position.y + bodyB.position.y) / 2
-    };
+
+    const ySortedSpheres = (bodyA.position.y > bodyB.position.y) ? {low: bodyA, high: bodyB} : {low: bodyB, high: bodyA};
+    const newPosition = lerpPosition(ySortedSpheres.low.position, ySortedSpheres.high.position, 0.7);
+    console.log(newPosition, ySortedSpheres)
+    // const newPosition = {
+    //     x: (bodyA.position.x + bodyB.position.x) / 2,
+    //     y: (bodyA.position.y + bodyB.position.y) / 2
+    // };
     const newVelocity = {
         x: (bodyA.velocity.x + bodyB.velocity.x) / 2,
         y: (bodyA.velocity.y + bodyB.velocity.y) / 2
     }
     bodyA.removing = true; bodyB.removing = true;
-
-    // console.log("REM!", (bodyA.stage-1) + " @" + bodyA.id);
-    // console.log("REM!", (bodyB.stage-1) + " @" + bodyB.id);
-    // Composite.remove(world, [bodyA]);
-    // Composite.remove(world, [bodyB]);
     
     const mergedSphere = newSphere(newPosition, SPHERES_CONFIG[newIndex], false, 0.25);
     Body.setAngle(mergedSphere, meanAngleFromTwo(bodyA.angle, bodyB.angle));
     Body.setVelocity(mergedSphere, newVelocity);
-    // console.log("ADD!", newIndex + " @" + mergedSphere.id);
-
-    // Composite.add(world, mergedSphere);
 
     scheduledMerges.push({rem1: bodyA, rem2: bodyB, add: mergedSphere});
+}
+
+function lerpPosition(vec1, vec2, amount) {
+    return {
+        x: vec1.x * amount + vec2.x * (1-amount),
+        y: vec1.y * amount + vec2.y * (1-amount)
+    }
 }
 
 function doPlannedMerges(mergesArray) {
