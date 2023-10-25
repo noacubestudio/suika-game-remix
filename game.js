@@ -1,5 +1,6 @@
 // config
-const DROP_HEIGHT = 100;
+const DROP_HEIGHT = 150;
+const DROP_BARRIER = 10;
 const PLAY_AREA_HEIGHT = 600; // make sure to also update the css
 const PLAY_AREA_WIDTH = 500;
 
@@ -97,22 +98,25 @@ Events.on(engine, 'beforeUpdate', (event) => {
     // do merges
     doPlannedMerges(scheduledMerges);
 
+    const drop_until = DROP_HEIGHT - DROP_BARRIER;
+
     // apply every x ms
     if (Common.now() >= lastTickTime + 1) {
 
-        const stackLowerEdge = nextDrops.bodies[0].bounds.max.y
-        if (stackLowerEdge < DROP_HEIGHT) {
+        const stackLowerEdge = nextDrops.bodies[0].bounds.max.y;
+        
+        if (stackLowerEdge < drop_until) {
             ticksToNextDrop--;
             if (ticksToNextDrop <= 0) Composite.translate(nextDrops, {x: 0, y: 5});
         } else {
             ticksToNextDrop = 10;
-            if (stackLowerEdge !== DROP_HEIGHT) Composite.translate(nextDrops, {x: 0, y: DROP_HEIGHT - stackLowerEdge});
+            if (stackLowerEdge !== drop_until) Composite.translate(nextDrops, {x: 0, y: drop_until - stackLowerEdge});
         }
 
         lastTickTime = Common.now();
     }
 
-    if (dropScheduled && nextDrops.bodies[0].bounds.max.y >= DROP_HEIGHT - 0.5) {
+    if (dropScheduled && nextDrops.bodies[0].bounds.max.y >= drop_until - 0.5) {
         dropSphereFromStack();
     }
     dropScheduled = false;
@@ -133,19 +137,25 @@ Events.on(engine, 'beforeUpdate', (event) => {
 
 Events.on(engine, 'afterUpdate', (event) => {
     const ctx = render.context;
-    let gradient = ctx.createLinearGradient(0, 2, 0, DROP_HEIGHT);
+    let gradient = ctx.createLinearGradient(0, 2, 0, DROP_HEIGHT-DROP_BARRIER);
     gradient.addColorStop(0, '#20082E');
     gradient.addColorStop(1, '#20082E00');
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_HEIGHT);
+    ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_HEIGHT-DROP_BARRIER);
 
-    if (!lostGame && nextDrops.bodies[0].bounds.max.y >= DROP_HEIGHT - 0.5) {
+    if (!lostGame && nextDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) {
         gradient = ctx.createLinearGradient(0, DROP_HEIGHT, 0, PLAY_AREA_HEIGHT);
         gradient.addColorStop(0, '#DDE5A700');
         gradient.addColorStop(1, '#DDE5A710');
         ctx.fillStyle = gradient;
         const dropRadius = nextDrops.bodies[0].circleRadius ?? 14;
         ctx.fillRect(stackX -dropRadius, DROP_HEIGHT, dropRadius * 2, PLAY_AREA_HEIGHT);
+
+        ctx.fillStyle = '#20082E90';
+        ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
+    } else {
+        ctx.fillStyle = '#DDE5A710';
+        ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
     }
 });
 
@@ -229,10 +239,10 @@ function sceneSetup() {
     ]);
 
     // sensor - anything that collided before cant touch this
-    Composite.add(world, Bodies.rectangle(PLAY_AREA_WIDTH/2, DROP_HEIGHT/2, PLAY_AREA_WIDTH+8, DROP_HEIGHT, {
+    Composite.add(world, Bodies.rectangle(PLAY_AREA_WIDTH/2, (DROP_HEIGHT-DROP_BARRIER)/2, PLAY_AREA_WIDTH+60, DROP_HEIGHT, {
         isStatic: true,
         isSensor: true,
-        render: { strokeStyle: '#20082E', fillStyle: '#20082E50', lineWidth: '2' }
+        render: { fillStyle: 'transparent' }//, strokeStyle: '#20082E', lineWidth: DROP_BARRIER }
     }));
 
     // init stack of static spheres
@@ -351,7 +361,7 @@ function meanAngleFromTwo(radA, radB) {
 }
 
 function pushSphereFromBag(dest, pickedProperties) {
-    let prevTop = DROP_HEIGHT;
+    let prevTop = DROP_HEIGHT - DROP_BARRIER;
     if (dest.bodies.length > 0) {
         prevTop = dest.bodies[dest.bodies.length-1].position.y;
         prevTop -= dest.bodies[dest.bodies.length-1].circleRadius;
