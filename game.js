@@ -1,7 +1,12 @@
 // config
 const DROP_HEIGHT = 100;
-const PLAY_AREA_HEIGHT = 550;
+const PLAY_AREA_HEIGHT = 600; // make sure to also update the css
 const PLAY_AREA_WIDTH = 500;
+
+const GRAVITY_MULT = 1.2;
+const MS_UNTIL_LOST = 2000;
+
+const BAG_ITEM_COUNT = 5;
 const SPHERES_CONFIG = [
     { stage:  1, radius:  14, points:   2, density: 0.3 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-01.wav') },
     { stage:  2, radius:  20, points:   4, density: 0.25, friction: 0.2, restitution: 0.15, sound: new Audio('woosh-02.wav') },
@@ -15,8 +20,6 @@ const SPHERES_CONFIG = [
     { stage: 10, radius: 140, points: 500, density: 0.2 , friction: 0.2, restitution: 0.15 },
     { stage: 11, radius: 160, points: 999, density: 0.2 , friction: 0.2, restitution: 0.15 },
 ];
-const BAG_ITEM_COUNT = 5;
-const MS_UNTIL_LOST = 2000;
 
 // load
 const mergeSound = new Audio('pop1.wav');
@@ -36,11 +39,11 @@ const Engine = Matter.Engine,
 
 // create engine
 const engine = Engine.create();
-engine.gravity.scale = 0.0012; // 0.001 is default
+engine.gravity.scale = 0.001 * GRAVITY_MULT;
 const world = engine.world;
 
+// random seed based on hour and date
 Common._seed = (() => {
-    
     const d = new Date();
     const fulldate = d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate();
     const currentHour = d.getHours();
@@ -62,33 +65,28 @@ const render = Render.create({
         // showDebug: true,
     }
 });
-
 Render.run(render);
 
-// create runner
+// create runner, simple gameloop
 const runner = Runner.create();
 Runner.run(runner, engine);
 
 
 
-
-
-
-// state
+// game state
 let randomBag = [];
 const nextDrops = Composite.create();
 let dropScheduled = false;
 let scheduledMerges = [];
 let ticksToNextDrop = 10;
+let inputX = null;
 let stackX = PLAY_AREA_WIDTH / 2;
 let score = 0;
 let lostGame = false;
 let lastTickTime = Common.now();
-// input
-let isTouching = false;
 
 
-// walls, sensor at the top
+// construct walls, initial stack of spheres, sensor at the top
 sceneSetup();
 
 
@@ -188,14 +186,14 @@ function startedTouch(event) {
     if (lostGame) return;
     if (event.type === 'touchstart') usingTouchDevice = true;
     if (event.type === 'mousedown' && usingTouchDevice) return;
-    isTouching = true;
 
     pushSphereFromBag(nextDrops, bagNext()); 
 
     const pos = (event.touches !== undefined) ? event.touches[0] : event;
     const rect = canvas.getBoundingClientRect();
     const scaledX = (pos.clientX - rect.left) / rect.width;
-    moveStackX(scaledX * PLAY_AREA_WIDTH);
+    inputX = scaledX * PLAY_AREA_WIDTH;
+    moveStackX(inputX);
 }
 
 function movedTouch(event) {
@@ -206,13 +204,13 @@ function movedTouch(event) {
     const pos = (event.touches !== undefined) ? event.touches[0] : event;
     const rect = canvas.getBoundingClientRect();
     const scaledX = (pos.clientX - rect.left) / rect.width;
-    moveStackX(scaledX * PLAY_AREA_WIDTH);
+    inputX = scaledX * PLAY_AREA_WIDTH;
+    moveStackX(inputX);
 }
 
 function endedTouch(event) {
     if (lostGame) return;
     if (event.type === 'mouseup' && usingTouchDevice) return;
-    isTouching = false;
 
     dropScheduled = true;
 }
@@ -222,7 +220,7 @@ function endedTouch(event) {
 function sceneSetup() {
     // floor and walls
     const wallStyle = { fillStyle: '#F9F' };
-    const wallWidth = 40;
+    const wallWidth = 100;
     const totalHeight = PLAY_AREA_HEIGHT + DROP_HEIGHT;
     Composite.add(world, [
         Bodies.rectangle(PLAY_AREA_WIDTH/2, totalHeight + wallWidth/2, PLAY_AREA_WIDTH, wallWidth, { isStatic: true, render: wallStyle }),
@@ -309,6 +307,7 @@ function dropSphereFromStack() {
             // console.log('-', (lowestSphere.stage-1) + " @" + lowestSphere.id, '-');
         }
     }
+    moveStackX(inputX);
 }
 
 function newSphere(pos, pickedProperties, isStatic, growPercent) {
