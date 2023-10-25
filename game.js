@@ -263,18 +263,11 @@ function spheresCollided(bodyA, bodyB) {
 
     const newIndex = bodyA.stage;
 
-    const ySortedSpheres = (bodyA.position.y > bodyB.position.y) ? {low: bodyA, high: bodyB} : {low: bodyB, high: bodyA};
-    const newPosition = lerpPosition(ySortedSpheres.low.position, ySortedSpheres.high.position, 0.7);
-    console.log(newPosition, ySortedSpheres)
-    // const newPosition = {
-    //     x: (bodyA.position.x + bodyB.position.x) / 2,
-    //     y: (bodyA.position.y + bodyB.position.y) / 2
-    // };
-    const newVelocity = {
-        x: (bodyA.velocity.x + bodyB.velocity.x) / 2,
-        y: (bodyA.velocity.y + bodyB.velocity.y) / 2
-    }
-    bodyA.removing = true; bodyB.removing = true;
+    const ageSpheres = (bodyA.id < bodyB.id) ? {old: bodyA, new: bodyB} : {old: bodyB, new: bodyA};
+    const newPosition = lerpVec(ageSpheres.old.position, ageSpheres.new.position, 0.3);
+    const newVelocity = lerpVec(ageSpheres.old.velocity, ageSpheres.new.velocity, 0.3);
+    bodyA.removing = true; 
+    bodyB.removing = true;
     
     const mergedSphere = newSphere(newPosition, SPHERES_CONFIG[newIndex], false, 0.25);
     Body.setAngle(mergedSphere, meanAngleFromTwo(bodyA.angle, bodyB.angle));
@@ -283,7 +276,7 @@ function spheresCollided(bodyA, bodyB) {
     scheduledMerges.push({rem1: bodyA, rem2: bodyB, add: mergedSphere});
 }
 
-function lerpPosition(vec1, vec2, amount) {
+function lerpVec(vec1, vec2, amount) {
     return {
         x: vec1.x * amount + vec2.x * (1-amount),
         y: vec1.y * amount + vec2.y * (1-amount)
