@@ -84,6 +84,7 @@ let inputX = null;
 let stackX = PLAY_AREA_WIDTH / 2;
 let score = 0;
 let lostGame = false;
+let lostGameTimestamp = null;
 let lastTickTime = Common.now();
 
 
@@ -98,6 +99,8 @@ Events.on(engine, 'beforeUpdate', (event) => {
     // do merges
     doPlannedMerges(scheduledMerges);
 
+
+    // drop stack of spheres above the lowest to follow
     const drop_until = DROP_HEIGHT - DROP_BARRIER;
 
     // apply every x ms
@@ -116,13 +119,17 @@ Events.on(engine, 'beforeUpdate', (event) => {
         lastTickTime = Common.now();
     }
 
+    // drop lowest
     if (dropScheduled && nextDrops.bodies[0].bounds.max.y >= drop_until - 0.5) {
         dropSphereFromStack();
+        if (lostGame) pushSphereFromBag(nextDrops, bagNext());
     }
-    dropScheduled = false;
+    if (!lostGame) dropScheduled = false;
 
-    // grow
+    // all bodies
     for (const body of world.bodies) {
+
+        // grow
         if (body.growPercent < 1) {
             body.growPercent *= 2;
             Body.scale(body, 2, 2);
@@ -132,32 +139,20 @@ Events.on(engine, 'beforeUpdate', (event) => {
                 body.growPercent = undefined;
             }
         }
+
+        if (body.position.y <= 20) {
+            Runner.stop(runner);
+            drawOntop();
+        }
+    }
+
+    if (lostGame && Common.now() - lostGameTimestamp > 2000) {
+        Runner.stop(runner);
+        drawOntop();
     }
 });
 
-Events.on(engine, 'afterUpdate', (event) => {
-    const ctx = render.context;
-    let gradient = ctx.createLinearGradient(0, 2, 0, DROP_HEIGHT-DROP_BARRIER);
-    gradient.addColorStop(0, '#20082E');
-    gradient.addColorStop(1, '#20082E00');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_HEIGHT-DROP_BARRIER);
-
-    if (!lostGame && nextDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) {
-        gradient = ctx.createLinearGradient(0, DROP_HEIGHT, 0, PLAY_AREA_HEIGHT);
-        gradient.addColorStop(0, '#DDE5A700');
-        gradient.addColorStop(1, '#DDE5A710');
-        ctx.fillStyle = gradient;
-        const dropRadius = nextDrops.bodies[0].circleRadius ?? 14;
-        ctx.fillRect(stackX -dropRadius, DROP_HEIGHT, dropRadius * 2, PLAY_AREA_HEIGHT);
-
-        ctx.fillStyle = '#20082E90';
-        ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
-    } else {
-        ctx.fillStyle = '#DDE5A710';
-        ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
-    }
-});
+Events.on(engine, 'afterUpdate', (event) => { drawOntop(); });
 
 Events.on(engine, 'collisionStart', (event) => {
     event.pairs.forEach((pair) => {
@@ -253,8 +248,36 @@ function sceneSetup() {
 }
 
 function endGame() {
-    document.getElementById('score-text').style.color = '#55ee33';
-    lostGame = true;
+    if (!lostGame) {
+        document.getElementById('score-text').style.color = '#55ee33';
+        lostGame = true;
+        lostGameTimestamp = Common.now();
+        dropScheduled = true;
+    }
+}
+
+function drawOntop() {
+    const ctx = render.context;
+    let gradient = ctx.createLinearGradient(0, 2, 0, DROP_HEIGHT-DROP_BARRIER);
+    gradient.addColorStop(0, '#20082E');
+    gradient.addColorStop(1, '#20082E00');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_HEIGHT-DROP_BARRIER);
+
+    if (!lostGame && nextDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) {
+        gradient = ctx.createLinearGradient(0, DROP_HEIGHT, 0, PLAY_AREA_HEIGHT);
+        gradient.addColorStop(0, '#DDE5A700');
+        gradient.addColorStop(1, '#DDE5A710');
+        ctx.fillStyle = gradient;
+        const dropRadius = nextDrops.bodies[0].circleRadius ?? 14;
+        ctx.fillRect(stackX -dropRadius, DROP_HEIGHT, dropRadius * 2, PLAY_AREA_HEIGHT);
+
+        ctx.fillStyle = '#20082E90';
+        ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
+    } else {
+        ctx.fillStyle = '#DDE5A710';
+        ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
+    }
 }
 
 function spheresCollided(bodyA, bodyB) {
