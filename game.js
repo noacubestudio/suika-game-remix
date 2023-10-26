@@ -223,6 +223,15 @@ function endedTouch(event) {
 
 
 function sceneSetup() {
+    // background
+    Composite.add(world, Bodies.rectangle(
+        PLAY_AREA_WIDTH/2, (DROP_HEIGHT+PLAY_AREA_HEIGHT)/2, PLAY_AREA_WIDTH, DROP_HEIGHT+PLAY_AREA_HEIGHT, {
+            render: { sprite: { texture: './img/bg.png' } },
+            isStatic: true,
+            collisionFilter: { mask: 2 }
+        }
+    ));
+
     // floor and walls
     const wallStyle = { fillStyle: '#F9F' };
     const wallWidth = 100;
@@ -275,7 +284,7 @@ function drawOntop() {
         ctx.fillStyle = '#20082E90';
         ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
     } else {
-        ctx.fillStyle = '#DDE5A710';
+        ctx.fillStyle = '#20082E10';
         ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
     }
 }
