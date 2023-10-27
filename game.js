@@ -427,6 +427,8 @@ function meanAngleFromTwo(radA, radB) {
 }
 
 function pushSphereFromBag(dest, pickedProperties) {
+    if (dest.bodies.length >= 5) return;
+
     let prevTop = DROP_HEIGHT - DROP_BARRIER;
     if (dest.bodies.length > 0) {
         prevTop = dest.bodies[dest.bodies.length-1].position.y;
