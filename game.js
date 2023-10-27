@@ -1,7 +1,7 @@
 // config
 const DROP_HEIGHT = 150;
 const DROP_BARRIER = 10;
-const PLAY_AREA_HEIGHT = 600; // make sure to also update the css
+const PLAY_AREA_HEIGHT = 150; // make sure to also update the css
 const PLAY_AREA_WIDTH = 500;
 
 const GRAVITY_MULT = 1.2;
@@ -73,10 +73,12 @@ const runner = Runner.create();
 Runner.run(runner, engine);
 
 
+// composites
+const compDrops = Composite.create();
+const compWorld = Composite.create();
 
 // game state
 let randomBag = [];
-const nextDrops = Composite.create();
 let dropScheduled = false;
 let scheduledMerges = [];
 let ticksToNextDrop = 10;
@@ -85,10 +87,11 @@ let stackX = PLAY_AREA_WIDTH / 2;
 let score = 0;
 let lostGame = false;
 let lostGameTimestamp = null;
+let reachedTopTimestamp = null;
 let lastTickTime = Common.now();
 
 
-// construct walls, initial stack of spheres, sensor at the top
+// construct walls, initial stack of spheres
 sceneSetup();
 
 
@@ -101,14 +104,14 @@ Events.on(engine, 'beforeUpdate', (event) => {
 
 
     // drop stack of spheres above the lowest to follow
-    if (nextDrops.bodies.length > 0) {
+    if (compDrops.bodies.length > 0) {
         updateStackState();
     } else {
         dropScheduled = false;
     }
 
-    // all bodies
-    for (const body of world.bodies) {
+    // all spheres
+    for (const body of compWorld.bodies) {
 
         // grow
         if (body.growPercent < 1) {
@@ -120,16 +123,31 @@ Events.on(engine, 'beforeUpdate', (event) => {
                 body.growPercent = undefined;
             }
         }
-
-        if (body.position.y <= 20) {
-            Runner.stop(runner);
-            drawOntop();
-        }
     }
 
-    if (lostGame && Common.now() - lostGameTimestamp > 4000) {
-        Runner.stop(runner);
-        drawOntop();
+    // if (lostGame && Common.now() - lostGameTimestamp > 4000) {
+    //     Runner.stop(runner);
+    //     drawOntop();
+    // }
+
+    // check bounds
+    const droppedSpheresTopY = (compWorld.bodies.length > 0) ? Composite.bounds(compWorld).min.y : Infinity;
+
+    // if (droppedSpheresTopY <= 20) {
+    //     Runner.stop(runner);
+    //     drawOntop();
+    // }
+    
+    if (droppedSpheresTopY <= DROP_HEIGHT) {
+        if (reachedTopTimestamp === null) {
+            // initial reach
+            reachedTopTimestamp = Common.now();
+        } else {
+            if (Common.now() - reachedTopTimestamp > MS_UNTIL_LOST) endGame();
+        }
+    } else {
+        // all spheres are lower
+        reachedTopTimestamp = null;
     }
 });
 
@@ -137,22 +155,9 @@ Events.on(engine, 'afterUpdate', (event) => { drawOntop(); });
 
 Events.on(engine, 'collisionStart', (event) => {
     event.pairs.forEach((pair) => {
-        if (pair.bodyA.isSensor && !pair.bodyB.isStatic) {
-            pair.bodyB.dangerStartTime = Common.now();
-        } else if (pair.bodyB.isSensor && !pair.bodyA.isStatic) {
-            pair.bodyA.dangerStartTime = Common.now();
-        } else if (pair.bodyA.stage === pair.bodyB.stage && pair.bodyA.isStatic === pair.bodyB.isStatic) {
+        // try merge if neither are static and both are the same kind of circle
+        if (pair.bodyA.stage === pair.bodyB.stage && pair.bodyA.isStatic === pair.bodyB.isStatic) {
             spheresCollided(pair.bodyA, pair.bodyB);
-        }
-    });
-});
-
-Events.on(engine, 'collisionActive', (event) => {
-    event.pairs.forEach((pair) => {
-        if (pair.bodyA.isSensor && !pair.bodyB.isStatic) {
-            if (Common.now() - pair.bodyB.dangerStartTime > MS_UNTIL_LOST) endGame();
-        } else if (pair.bodyB.isSensor && !pair.bodyA.isStatic) {
-            if (Common.now() - pair.bodyA.dangerStartTime > MS_UNTIL_LOST) endGame();
         }
     });
 });
@@ -176,7 +181,7 @@ document.addEventListener('keydown', (event) => {
 
 function dropWithKeyboard() {
     if (lostGame) return;
-    pushSphereFromBag(nextDrops, bagNext()); 
+    pushSphereFromBag(compDrops, bagNext()); 
     dropScheduled = true;
 }
 
@@ -186,7 +191,7 @@ function startedTouch(event) {
     if (event.type === 'touchstart') usingTouchDevice = true;
     if (event.type === 'mousedown' && usingTouchDevice) return;
 
-    pushSphereFromBag(nextDrops, bagNext()); 
+    pushSphereFromBag(compDrops, bagNext()); 
 
     const pos = (event.touches !== undefined) ? event.touches[0] : event;
     const rect = canvas.getBoundingClientRect();
@@ -245,9 +250,12 @@ function sceneSetup() {
 
     // init stack of static spheres
     for (let i = 0; i < BAG_ITEM_COUNT; i++) {
-        pushSphereFromBag(nextDrops, bagNext()); 
+        pushSphereFromBag(compDrops, bagNext()); 
     }
-    Composite.add(world, nextDrops);
+    Composite.add(world, compDrops);
+
+    // composite for the dropped spheres
+    Composite.add(world, compWorld);
 }
 
 function endGame() {
@@ -267,16 +275,24 @@ function drawOntop() {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_HEIGHT-DROP_BARRIER);
 
-    if (!lostGame && nextDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) {
+    if (!lostGame && compDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) {
         gradient = ctx.createLinearGradient(0, DROP_HEIGHT, 0, PLAY_AREA_HEIGHT);
         gradient.addColorStop(0, '#DDE5A700');
         gradient.addColorStop(1, '#DDE5A710');
         ctx.fillStyle = gradient;
-        const dropRadius = nextDrops.bodies[0].circleRadius ?? 14;
+        const dropRadius = compDrops.bodies[0].circleRadius ?? 14;
         ctx.fillRect(stackX -dropRadius, DROP_HEIGHT, dropRadius * 2, PLAY_AREA_HEIGHT);
 
         ctx.fillStyle = '#20082E90';
         ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
+
+        if (reachedTopTimestamp !== null) {
+            const intensity = (Common.now() - reachedTopTimestamp) / MS_UNTIL_LOST;
+            const blinkRed = Math.sin(Common.now() / 30);
+            ctx.fillStyle = `rgba(255, 0, 0, ${blinkRed * intensity})`;;
+            ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
+        }
+        
     }
 }
 
@@ -317,14 +333,14 @@ function lerpVec(vec1, vec2, amount) {
 function doPlannedMerges(mergesArray) {
     mergesArray.forEach((bodiesGroup) => {
 
-        // console.log("before", world.bodies.map((body) => {return body.id} ));
+        // console.log("before", compWorld.bodies.map((body) => {return body.id} ));
         
-        Composite.remove(world, bodiesGroup.rem1);
-        Composite.remove(world, bodiesGroup.rem2);
-        Composite.add(world, bodiesGroup.add);
+        Composite.remove(compWorld, bodiesGroup.rem1);
+        Composite.remove(compWorld, bodiesGroup.rem2);
+        Composite.add(compWorld, bodiesGroup.add);
 
         // console.log("rem", bodiesGroup.rem1.id, bodiesGroup.rem2.id, "add", bodiesGroup.add.id);
-        // console.log("after", world.bodies.map((body) => {return body.id} ));
+        // console.log("after", compWorld.bodies.map((body) => {return body.id} ));
     });
     mergesArray.length = 0;
 }
@@ -333,41 +349,41 @@ function updateStackState() {
     const drop_until = DROP_HEIGHT - DROP_BARRIER;
 
     // apply every x ms
-    if (Common.now() >= lastTickTime + 1 && nextDrops.bodies.length > 0) {
+    if (Common.now() >= lastTickTime + 1 && compDrops.bodies.length > 0) {
 
-        const stackLowerEdge = nextDrops.bodies[0].bounds.max.y;
+        const stackLowerEdge = compDrops.bodies[0].bounds.max.y;
         
         if (stackLowerEdge < drop_until) {
             ticksToNextDrop--;
-            if (ticksToNextDrop <= 0) Composite.translate(nextDrops, {x: 0, y: 5});
+            if (ticksToNextDrop <= 0) Composite.translate(compDrops, {x: 0, y: 5});
         } else {
             ticksToNextDrop = 10;
-            if (stackLowerEdge !== drop_until) Composite.translate(nextDrops, {x: 0, y: drop_until - stackLowerEdge});
+            if (stackLowerEdge !== drop_until) Composite.translate(compDrops, {x: 0, y: drop_until - stackLowerEdge});
         }
 
         lastTickTime = Common.now();
     }
 
     // drop lowest
-    if (dropScheduled && nextDrops.bodies[0].bounds.max.y >= drop_until - 0.5) {
+    if (dropScheduled && compDrops.bodies[0].bounds.max.y >= drop_until - 0.5) {
         dropSphereFromStack();
     }
     if (!lostGame) dropScheduled = false;
 }
 
 function dropSphereFromStack() {
-    if (nextDrops.bodies.length === 0) return;
+    if (compDrops.bodies.length === 0) return;
 
-    // turn on physics, transfer to world
-    const lowestSphere = nextDrops.bodies[0];
+    // turn on physics, transfer to comp World
+    const lowestSphere = compDrops.bodies[0];
     Body.setStatic(lowestSphere, false);
-    Composite.move(nextDrops, lowestSphere, world);
+    Composite.move(compDrops, lowestSphere, compWorld);
 
     // play sound
     if (lowestSphere.sound !== undefined) lowestSphere.sound.play();
     
     // move stack - just in case the next sphere is wider and the stack was on the side
-    if (nextDrops.bodies.length > 0) moveStackX(inputX);
+    if (compDrops.bodies.length > 0) moveStackX(inputX);
 }
 
 function newSphere(pos, pickedProperties, isStatic, growPercent) {
@@ -425,13 +441,13 @@ function pushSphereFromBag(dest, pickedProperties) {
 }
 
 function moveStackX(newX) {
-    const bounds = nextDrops.bodies[0].circleRadius ?? 0;
+    const bounds = compDrops.bodies[0].circleRadius ?? 0;
     newX = Math.max(newX, bounds);
     newX = Math.min(newX, PLAY_AREA_WIDTH - bounds);
 
     stackX = newX;
 
-    for (const body of nextDrops.bodies) {
+    for (const body of compDrops.bodies) {
         Body.setPosition(body, {x: stackX, y: body.position.y})
     }
 }
