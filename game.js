@@ -101,30 +101,11 @@ Events.on(engine, 'beforeUpdate', (event) => {
 
 
     // drop stack of spheres above the lowest to follow
-    const drop_until = DROP_HEIGHT - DROP_BARRIER;
-
-    // apply every x ms
-    if (Common.now() >= lastTickTime + 1) {
-
-        const stackLowerEdge = nextDrops.bodies[0].bounds.max.y;
-        
-        if (stackLowerEdge < drop_until) {
-            ticksToNextDrop--;
-            if (ticksToNextDrop <= 0) Composite.translate(nextDrops, {x: 0, y: 5});
-        } else {
-            ticksToNextDrop = 10;
-            if (stackLowerEdge !== drop_until) Composite.translate(nextDrops, {x: 0, y: drop_until - stackLowerEdge});
-        }
-
-        lastTickTime = Common.now();
+    if (nextDrops.bodies.length > 0) {
+        updateStackState();
+    } else {
+        dropScheduled = false;
     }
-
-    // drop lowest
-    if (dropScheduled && nextDrops.bodies[0].bounds.max.y >= drop_until - 0.5) {
-        dropSphereFromStack();
-        if (lostGame) pushSphereFromBag(nextDrops, bagNext());
-    }
-    if (!lostGame) dropScheduled = false;
 
     // all bodies
     for (const body of world.bodies) {
@@ -146,7 +127,7 @@ Events.on(engine, 'beforeUpdate', (event) => {
         }
     }
 
-    if (lostGame && Common.now() - lostGameTimestamp > 2000) {
+    if (lostGame && Common.now() - lostGameTimestamp > 4000) {
         Runner.stop(runner);
         drawOntop();
     }
@@ -185,6 +166,19 @@ document.addEventListener('mousedown', startedTouch);
 document.addEventListener('mousemove', movedTouch);
 document.addEventListener('mouseup', endedTouch);
 
+// Event listener for the spacebar key press
+document.addEventListener('keydown', (event) => {
+    if ([' ', 'Spacebar', 'Enter', 's', 'S'].includes(event.key)) { // Check for spacebar key
+        event.preventDefault();
+        dropWithKeyboard();
+    }
+});
+
+function dropWithKeyboard() {
+    if (lostGame) return;
+    pushSphereFromBag(nextDrops, bagNext()); 
+    dropScheduled = true;
+}
 
 function startedTouch(event) {
     event.preventDefault();
@@ -283,9 +277,6 @@ function drawOntop() {
 
         ctx.fillStyle = '#20082E90';
         ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
-    } else {
-        ctx.fillStyle = '#20082E10';
-        ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
     }
 }
 
@@ -338,18 +329,45 @@ function doPlannedMerges(mergesArray) {
     mergesArray.length = 0;
 }
 
-function dropSphereFromStack() {
-    if (nextDrops.bodies.length > 0) {
-        const lowestSphere = nextDrops.bodies[0];
+function updateStackState() {
+    const drop_until = DROP_HEIGHT - DROP_BARRIER;
+
+    // apply every x ms
+    if (Common.now() >= lastTickTime + 1 && nextDrops.bodies.length > 0) {
+
+        const stackLowerEdge = nextDrops.bodies[0].bounds.max.y;
         
-        if (lowestSphere !== undefined) {
-            Body.setStatic(lowestSphere, false);
-            if (lowestSphere.sound !== undefined) lowestSphere.sound.play();
-            Composite.move(nextDrops, lowestSphere, world);
-            // console.log('-', (lowestSphere.stage-1) + " @" + lowestSphere.id, '-');
+        if (stackLowerEdge < drop_until) {
+            ticksToNextDrop--;
+            if (ticksToNextDrop <= 0) Composite.translate(nextDrops, {x: 0, y: 5});
+        } else {
+            ticksToNextDrop = 10;
+            if (stackLowerEdge !== drop_until) Composite.translate(nextDrops, {x: 0, y: drop_until - stackLowerEdge});
         }
+
+        lastTickTime = Common.now();
     }
-    moveStackX(inputX);
+
+    // drop lowest
+    if (dropScheduled && nextDrops.bodies[0].bounds.max.y >= drop_until - 0.5) {
+        dropSphereFromStack();
+    }
+    if (!lostGame) dropScheduled = false;
+}
+
+function dropSphereFromStack() {
+    if (nextDrops.bodies.length === 0) return;
+
+    // turn on physics, transfer to world
+    const lowestSphere = nextDrops.bodies[0];
+    Body.setStatic(lowestSphere, false);
+    Composite.move(nextDrops, lowestSphere, world);
+
+    // play sound
+    if (lowestSphere.sound !== undefined) lowestSphere.sound.play();
+    
+    // move stack - just in case the next sphere is wider and the stack was on the side
+    if (nextDrops.bodies.length > 0) moveStackX(inputX);
 }
 
 function newSphere(pos, pickedProperties, isStatic, growPercent) {
