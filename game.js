@@ -46,9 +46,9 @@ const world = engine.world;
 // random seed based on hour and date
 Common._seed = (() => {
     const d = new Date();
-    const fulldate = d.getFullYear() * 10000 + d.getMonth() * 100 + d.getDate();
+    const currentDate = d.getMonth() * 100 + d.getDate();
     const currentHour = d.getHours();
-    return fulldate * 100 + currentHour;
+    return currentDate * 100 + currentHour;
 })();
 document.getElementById('seed').textContent = "Seed " + Common._seed;
 
