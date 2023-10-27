@@ -1,7 +1,7 @@
 // config
 const DROP_HEIGHT = 150;
 const DROP_BARRIER = 10;
-const PLAY_AREA_HEIGHT = 150; // make sure to also update the css
+const PLAY_AREA_HEIGHT = 600; // make sure to also update the css
 const PLAY_AREA_WIDTH = 500;
 
 const GRAVITY_MULT = 1.2;
