@@ -6,6 +6,7 @@ const PLAY_AREA_WIDTH = 500;
 
 const GRAVITY_MULT = 1.2;
 const MS_UNTIL_LOST = 2000;
+const MS_UNTIL_MERGE = 100;
 
 const BAG_ITEM_COUNT = 5;
 const SPHERES_CONFIG = [
@@ -116,7 +117,7 @@ sceneSetup();
 Events.on(engine, 'beforeUpdate', (event) => {
 
     // do merges
-    doPlannedMerges(scheduledMerges);
+    scheduledMerges = advancePlannedMerges(scheduledMerges);
 
 
     // drop stack of spheres above the lowest to follow
@@ -349,30 +350,30 @@ function renderSceneToCanvas(ctx) {
 }
 
 function spheresCollided(bodyA, bodyB) {
-    // final stage cant merge
-    if (bodyA.stage === SPHERES_CONFIG[SPHERES_CONFIG.length-1].stage) return;
 
     // already merging
     if (bodyA.removing || bodyB.removing) return;
 
-    mergeSound.play();
-
-    score += bodyA.points;
-    document.getElementById('score-text').textContent = score;
-
-    const newIndex = bodyA.stage;
-
-    const ageSpheres = (bodyA.id < bodyB.id) ? {old: bodyA, new: bodyB} : {old: bodyB, new: bodyA};
-    const newPosition = lerpVec(ageSpheres.old.position, ageSpheres.new.position, 0.3);
-    const newVelocity = lerpVec(ageSpheres.old.velocity, ageSpheres.new.velocity, 0.3);
+    // remove
     bodyA.removing = true; 
     bodyB.removing = true;
-    
-    const mergedSphere = newSphere(newPosition, SPHERES_CONFIG[newIndex], false, 0.25);
-    Body.setAngle(mergedSphere, meanAngleFromTwo(bodyA.angle, bodyB.angle));
-    Body.setVelocity(mergedSphere, newVelocity);
 
-    scheduledMerges.push({rem1: bodyA, rem2: bodyB, add: mergedSphere});
+    // add, only if not final stage
+    if (bodyA.stage !== SPHERES_CONFIG[SPHERES_CONFIG.length-1].stage) {
+        const newIndex = bodyA.stage;
+
+        const ageSpheres = (bodyA.id < bodyB.id) ? {old: bodyA, new: bodyB} : {old: bodyB, new: bodyA};
+        const newPosition = lerpVec(ageSpheres.old.position, ageSpheres.new.position, 0.3);
+        const newVelocity = lerpVec(ageSpheres.old.velocity, ageSpheres.new.velocity, 0.3);
+
+        const mergedSphere = newSphere(newPosition, SPHERES_CONFIG[newIndex], false, 0.25);
+        Body.setAngle(mergedSphere, meanAngleFromTwo(bodyA.angle, bodyB.angle));
+        Body.setVelocity(mergedSphere, newVelocity);
+        scheduledMerges.push({rem1: bodyA, rem2: bodyB, add: mergedSphere, timestamp: Common.now()});
+    } else {
+        // only schedule deletion
+        scheduledMerges.push({rem1: bodyA, rem2: bodyB, timestamp: Common.now()});
+    }
 }
 
 function lerpVec(vec1, vec2, amount) {
@@ -382,19 +383,34 @@ function lerpVec(vec1, vec2, amount) {
     }
 }
 
-function doPlannedMerges(mergesArray) {
+function advancePlannedMerges(mergesArray) {
+
+    const newArray = [];
     mergesArray.forEach((bodiesGroup) => {
 
-        // console.log("before", compWorld.bodies.map((body) => {return body.id} ));
-        
-        Composite.remove(compWorld, bodiesGroup.rem1);
-        Composite.remove(compWorld, bodiesGroup.rem2);
-        Composite.add(compWorld, bodiesGroup.add);
+        if (Common.now() - bodiesGroup.timestamp >= MS_UNTIL_MERGE) {
 
-        // console.log("rem", bodiesGroup.rem1.id, bodiesGroup.rem2.id, "add", bodiesGroup.add.id);
-        // console.log("after", compWorld.bodies.map((body) => {return body.id} ));
+            // fx
+            mergeSound.play();
+            score += bodiesGroup.rem1.points;
+            document.getElementById('score-text').textContent = score;
+
+            // time to merge
+            Composite.remove(compWorld, bodiesGroup.rem1);
+            Composite.remove(compWorld, bodiesGroup.rem2);
+            if (bodiesGroup.add !== undefined) {
+                Composite.add(compWorld, bodiesGroup.add);
+            }
+            // console.log("before", compWorld.bodies.map((body) => {return body.id} ));
+            // console.log("rem", bodiesGroup.rem1.id, bodiesGroup.rem2.id, "add", bodiesGroup.add.id);
+            // console.log("after", compWorld.bodies.map((body) => {return body.id} ));
+
+        } else {
+            // add back
+            newArray.push(bodiesGroup);
+        }
     });
-    mergesArray.length = 0;
+    return newArray;
 }
 
 function updateStackState() {
@@ -491,7 +507,9 @@ function pushSphereFromBag(dest, pickedProperties) {
         y: prevTop - pickedProperties.radius
     };
 
-    Composite.add(dest, newSphere(pos, pickedProperties, true));
+    const addedSphere = newSphere(pos, pickedProperties, true);
+    Body.setAngle(addedSphere, Common.shuffle([-0.02, 0.02, -0.04, 0.04])[0]*Math.PI);
+    Composite.add(dest, addedSphere);
 }
 
 function moveStackX(newX) {
