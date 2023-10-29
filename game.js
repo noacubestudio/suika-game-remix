@@ -6,7 +6,8 @@ const PLAY_AREA_WIDTH = 500;
 
 const GRAVITY_MULT = 1.2;
 const MS_UNTIL_LOST = 2000;
-const MS_UNTIL_MERGE = 100;
+const MS_UNTIL_MERGE = 300;
+const MERGE_LERP_BIAS = 0.3 // 0 means the older/lower sphere, 1 means the newer/higher sphere
 
 const BAG_ITEM_COUNT = 5;
 const SPHERES_CONFIG = [
@@ -69,7 +70,9 @@ document.getElementById('seed').textContent = "Seed " + Common._seed;
 // });
 // Render.run(render);
 
-// WIP -----
+
+// set up rendering
+
 const mainCanvas = document.getElementById('canvas-container');
 const mainCtx = mainCanvas.getContext('2d');
 mainCanvas.width = PLAY_AREA_WIDTH;
@@ -86,7 +89,9 @@ testSprites.sphere = Array.from({ length: 11 }, (_, index) => {
 
 
 // create runner, simple gameloop
-const runner = Runner.create();
+const runner = Runner.create({
+    isFixed: true,
+});
 Runner.run(runner, engine);
 
 
@@ -106,6 +111,7 @@ let lostGame = false;
 let lostGameTimestamp = null;
 let reachedTopTimestamp = null;
 let lastTickTime = Common.now();
+let highestID = 0;
 
 
 // construct walls, initial stack of spheres
@@ -127,31 +133,12 @@ Events.on(engine, 'beforeUpdate', (event) => {
         dropScheduled = false;
     }
 
-    // all spheres
-    for (const body of compWorld.bodies) {
-
-        // grow
-        if (body.growPercent < 1) {
-            body.growPercent *= 2;
-            Body.scale(body, 2, 2);
-            // body.render.sprite.xScale = 2 - body.growPercent;
-            // body.render.sprite.yScale = 2 - body.growPercent;
-            if (body.growPercent >= 1) {
-                body.growPercent = undefined;
-            }
-        }
-    }
-
     // if (lostGame && Common.now() - lostGameTimestamp > 4000) {
     //     Runner.stop(runner);
     // }
 
     // check bounds
     const droppedSpheresTopY = (compWorld.bodies.length > 0) ? Composite.bounds(compWorld).min.y : Infinity;
-
-    // if (droppedSpheresTopY <= 20) {
-    //     Runner.stop(runner);
-    // }
     
     if (droppedSpheresTopY <= DROP_HEIGHT) {
         if (reachedTopTimestamp === null) {
@@ -293,7 +280,7 @@ function renderSceneToCanvas(ctx) {
     if (!lostGame && compDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) { 
         let gradient = ctx.createLinearGradient(0, DROP_HEIGHT, 0, PLAY_AREA_HEIGHT);
         gradient.addColorStop(0, '#DDE5A700');
-        gradient.addColorStop(1, '#DDE5A720');
+        gradient.addColorStop(1, '#DDE5A725');
         ctx.fillStyle = gradient;
         const dropRadius = compDrops.bodies[0].circleRadius ?? 14;
         ctx.fillRect(stackX -dropRadius, DROP_HEIGHT, dropRadius * 2, PLAY_AREA_HEIGHT);
@@ -310,12 +297,23 @@ function renderSceneToCanvas(ctx) {
     });
 
     function renderSphereBody(ctx, body) {
-        //ctxCircle(ctx, body.position.x, body.position.y, body.circleRadius, 'white');
-        ctx.save();
-        ctx.translate(body.position.x, body.position.y);
-        ctx.rotate(body.angle)
         const r = body.circleRadius * (body.growPercent ?? 1);
+        let p = { x: body.position.x, y: body.position.y };
+
+        if (body.removeTimestamp !== undefined && !body.destination) {
+            const mergeDonePercent = (Common.now() - body.removeTimestamp) / MS_UNTIL_MERGE;
+            const mergeCurve = (Math.max(0, mergeDonePercent - 0.5) * 2) ** 4; // wait half the merge wait time, then accelerate towards destination
+            const destPosition = body.mergeTarget.position;
+            const currentMergePosition = lerpVec(p, destPosition, mergeCurve * (1-MERGE_LERP_BIAS));
+            p = currentMergePosition;
+        }
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(body.angle)
         ctx.drawImage(testSprites.sphere[body.stage - 1], - r, - r, r * 2, r * 2);
+        // ctx.fillStyle = 'black';
+        // ctx.fillText(body.dropID ?? '', 0, 0)
         ctx.restore();
     }
 
@@ -352,34 +350,27 @@ function renderSceneToCanvas(ctx) {
 function spheresCollided(bodyA, bodyB) {
 
     // already merging
-    if (bodyA.removing || bodyB.removing) return;
+    if (bodyA.removeTimestamp || bodyB.removeTimestamp) return;
 
-    // remove
-    bodyA.removing = true; 
-    bodyB.removing = true;
+    // mark which one should be the destination and which one mostly moves
+    const condition = (bodyA.dropID === highestID || bodyB.dropID === highestID) // if one was last dropped
+        ? (bodyA.dropID < bodyB.dropID) // compare age
+        : (bodyA.position.y > bodyB.position.y); // mark lower one as older
+    const ageSpheres = condition ? {old: bodyA, new: bodyB} : {old: bodyB, new: bodyA};
+    ageSpheres.old.destination = true;
+    ageSpheres.old.mergeTarget = ageSpheres.new;
+    ageSpheres.new.mergeTarget = ageSpheres.old;
 
-    // add, only if not final stage
-    if (bodyA.stage !== SPHERES_CONFIG[SPHERES_CONFIG.length-1].stage) {
-        const newIndex = bodyA.stage;
-
-        const ageSpheres = (bodyA.id < bodyB.id) ? {old: bodyA, new: bodyB} : {old: bodyB, new: bodyA};
-        const newPosition = lerpVec(ageSpheres.old.position, ageSpheres.new.position, 0.3);
-        const newVelocity = lerpVec(ageSpheres.old.velocity, ageSpheres.new.velocity, 0.3);
-
-        const mergedSphere = newSphere(newPosition, SPHERES_CONFIG[newIndex], false, 0.25);
-        Body.setAngle(mergedSphere, meanAngleFromTwo(bodyA.angle, bodyB.angle));
-        Body.setVelocity(mergedSphere, newVelocity);
-        scheduledMerges.push({rem1: bodyA, rem2: bodyB, add: mergedSphere, timestamp: Common.now()});
-    } else {
-        // only schedule deletion
-        scheduledMerges.push({rem1: bodyA, rem2: bodyB, timestamp: Common.now()});
-    }
+    // mark as removed remove
+    bodyA.removeTimestamp = Common.now(); 
+    bodyB.removeTimestamp = Common.now();
+    scheduledMerges.push({orderedBodies: [ageSpheres.old, ageSpheres.new], timestamp: Common.now()});
 }
 
 function lerpVec(vec1, vec2, amount) {
     return {
-        x: vec1.x * amount + vec2.x * (1-amount),
-        y: vec1.y * amount + vec2.y * (1-amount)
+        x: vec1.x * (1-amount) + vec2.x * amount,
+        y: vec1.y * (1-amount) + vec2.y * amount
     }
 }
 
@@ -388,21 +379,36 @@ function advancePlannedMerges(mergesArray) {
     const newArray = [];
     mergesArray.forEach((bodiesGroup) => {
 
+        // final moment, do the merge
         if (Common.now() - bodiesGroup.timestamp >= MS_UNTIL_MERGE) {
+
+            const a = bodiesGroup.orderedBodies[0]; const b = bodiesGroup.orderedBodies[1];
 
             // fx
             mergeSound.play();
-            score += bodiesGroup.rem1.points;
+            score += a.points;
             document.getElementById('score-text').textContent = score;
 
+            // add, only if not biggest stage of circles
+            if (a.stage !== SPHERES_CONFIG[SPHERES_CONFIG.length-1].stage) {
+                const newPosition = lerpVec(a.position,b.position, MERGE_LERP_BIAS);
+                const newVelocity = lerpVec(a.velocity, b.velocity, MERGE_LERP_BIAS);
+
+                const mergedSphere = newSphere(newPosition, SPHERES_CONFIG[a.stage], false);
+                mergedSphere.dropID = -1;
+                Body.setAngle(mergedSphere, meanAngleFromTwo(a.angle, b.angle));
+                Body.setVelocity(mergedSphere, newVelocity);
+                bodiesGroup.add = mergedSphere;
+            } 
+
             // time to merge
-            Composite.remove(compWorld, bodiesGroup.rem1);
-            Composite.remove(compWorld, bodiesGroup.rem2);
+            Composite.remove(compWorld, a);
+            Composite.remove(compWorld, b);
             if (bodiesGroup.add !== undefined) {
                 Composite.add(compWorld, bodiesGroup.add);
             }
             // console.log("before", compWorld.bodies.map((body) => {return body.id} ));
-            // console.log("rem", bodiesGroup.rem1.id, bodiesGroup.rem2.id, "add", bodiesGroup.add.id);
+            // console.log("rem", bodiesGroup.a.id, bodiesGroup.rem2.id, "add", bodiesGroup.add.id);
             // console.log("after", compWorld.bodies.map((body) => {return body.id} ));
 
         } else {
@@ -446,6 +452,8 @@ function dropSphereFromStack() {
     const lowestSphere = compDrops.bodies[0];
     Body.setStatic(lowestSphere, false);
     Composite.move(compDrops, lowestSphere, compWorld);
+    lowestSphere.dropID = highestID;
+    highestID++;
 
     // play sound
     if (lowestSphere.sound !== undefined) lowestSphere.sound.play();
@@ -469,12 +477,12 @@ function newSphere(pos, pickedProperties, isStatic, growPercent) {
         points: pickedProperties.points,
         sound: pickedProperties.sound
     });
-    if (growPercent !== undefined) { 
-        Body.scale(sphere, growPercent, growPercent);
-        // sphere.render.sprite.xScale = 2 - growPercent;
-        // sphere.render.sprite.yScale = 2 - growPercent;
-        sphere.growPercent = growPercent; 
-    };
+    // if (growPercent !== undefined) { 
+    //     //Body.scale(sphere, growPercent, growPercent);
+    //     // sphere.render.sprite.xScale = 2 - growPercent;
+    //     // sphere.render.sprite.yScale = 2 - growPercent;
+    //     //sphere.growPercent = growPercent; 
+    // };
     return sphere;
 }
 
