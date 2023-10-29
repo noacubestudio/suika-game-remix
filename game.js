@@ -53,20 +53,36 @@ Common._seed = (() => {
 document.getElementById('seed').textContent = "Seed " + Common._seed;
 
 // create renderer
-const canvas = document.getElementById('canvas-container');
-const render = Render.create({
-    canvas: canvas,
-    engine: engine,
-    options: {
-        width: PLAY_AREA_WIDTH,
-        height: PLAY_AREA_HEIGHT + DROP_HEIGHT,
-        background: '#4A1D60',
-        wireframes: false,
-        // showCollisions: true,
-        // showDebug: true,
-    }
+//const canvas_old = document.getElementById('canvas-container');
+// const render = Render.create({
+//     canvas: canvas,
+//     engine: engine,
+//     options: {
+//         width: PLAY_AREA_WIDTH,
+//         height: PLAY_AREA_HEIGHT + DROP_HEIGHT,
+//         background: '#4A1D60',
+//         wireframes: false,
+//         // showCollisions: true,
+//         // showDebug: true,
+//     }
+// });
+// Render.run(render);
+
+// WIP -----
+const mainCanvas = document.getElementById('canvas-container');
+const mainCtx = mainCanvas.getContext('2d');
+mainCanvas.width = PLAY_AREA_WIDTH;
+mainCanvas.height = PLAY_AREA_HEIGHT + DROP_HEIGHT;
+const testSprites = {};
+testSprites.bg = new Image();
+    testSprites.bg.src = './img/bg.png';
+testSprites.sphere = Array.from({ length: 11 }, (_, index) => {
+    const img = new Image();
+    img.src = `./img/ball${index + 1}.png`;
+    return img;
 });
-Render.run(render);
+
+
 
 // create runner, simple gameloop
 const runner = Runner.create();
@@ -117,8 +133,8 @@ Events.on(engine, 'beforeUpdate', (event) => {
         if (body.growPercent < 1) {
             body.growPercent *= 2;
             Body.scale(body, 2, 2);
-            body.render.sprite.xScale = 2 - body.growPercent;
-            body.render.sprite.yScale = 2 - body.growPercent;
+            // body.render.sprite.xScale = 2 - body.growPercent;
+            // body.render.sprite.yScale = 2 - body.growPercent;
             if (body.growPercent >= 1) {
                 body.growPercent = undefined;
             }
@@ -127,7 +143,6 @@ Events.on(engine, 'beforeUpdate', (event) => {
 
     // if (lostGame && Common.now() - lostGameTimestamp > 4000) {
     //     Runner.stop(runner);
-    //     drawOntop();
     // }
 
     // check bounds
@@ -135,7 +150,6 @@ Events.on(engine, 'beforeUpdate', (event) => {
 
     // if (droppedSpheresTopY <= 20) {
     //     Runner.stop(runner);
-    //     drawOntop();
     // }
     
     if (droppedSpheresTopY <= DROP_HEIGHT) {
@@ -151,7 +165,7 @@ Events.on(engine, 'beforeUpdate', (event) => {
     }
 });
 
-Events.on(engine, 'afterUpdate', (event) => { drawOntop(); });
+Events.on(engine, 'afterUpdate', (event) => { renderSceneToCanvas(mainCtx) });
 
 Events.on(engine, 'collisionStart', (event) => {
     event.pairs.forEach((pair) => {
@@ -194,7 +208,7 @@ function startedTouch(event) {
     pushSphereFromBag(compDrops, bagNext()); 
 
     const pos = (event.touches !== undefined) ? event.touches[0] : event;
-    const rect = canvas.getBoundingClientRect();
+    const rect = mainCanvas.getBoundingClientRect();
     const scaledX = (pos.clientX - rect.left) / rect.width;
     inputX = scaledX * PLAY_AREA_WIDTH;
     moveStackX(inputX);
@@ -206,7 +220,7 @@ function movedTouch(event) {
     if (lostGame) return;
 
     const pos = (event.touches !== undefined) ? event.touches[0] : event;
-    const rect = canvas.getBoundingClientRect();
+    const rect = mainCanvas.getBoundingClientRect();
     const scaledX = (pos.clientX - rect.left) / rect.width;
     inputX = scaledX * PLAY_AREA_WIDTH;
     moveStackX(inputX);
@@ -267,8 +281,53 @@ function endGame() {
     }
 }
 
-function drawOntop() {
-    const ctx = render.context;
+function renderSceneToCanvas(ctx) {
+
+    ctx.clearRect(0, 0, PLAY_AREA_WIDTH, PLAY_AREA_HEIGHT + DROP_HEIGHT);
+
+    // background
+    ctx.drawImage(testSprites.bg, 0, 0);
+
+    // line to indicate where you next drop
+    if (!lostGame && compDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) { 
+        let gradient = ctx.createLinearGradient(0, DROP_HEIGHT, 0, PLAY_AREA_HEIGHT);
+        gradient.addColorStop(0, '#DDE5A700');
+        gradient.addColorStop(1, '#DDE5A720');
+        ctx.fillStyle = gradient;
+        const dropRadius = compDrops.bodies[0].circleRadius ?? 14;
+        ctx.fillRect(stackX -dropRadius, DROP_HEIGHT, dropRadius * 2, PLAY_AREA_HEIGHT);
+    }
+
+    // foreground
+
+    compDrops.bodies.forEach((body) => {
+        renderSphereBody(ctx, body);
+    });
+
+    compWorld.bodies.forEach((body) => {
+        renderSphereBody(ctx, body);
+    });
+
+    function renderSphereBody(ctx, body) {
+        //ctxCircle(ctx, body.position.x, body.position.y, body.circleRadius, 'white');
+        ctx.save();
+        ctx.translate(body.position.x, body.position.y);
+        ctx.rotate(body.angle)
+        const r = body.circleRadius * (body.growPercent ?? 1);
+        ctx.drawImage(testSprites.sphere[body.stage - 1], - r, - r, r * 2, r * 2);
+        ctx.restore();
+    }
+
+    // function ctxCircle(context, centerX, centerY, radius, fillColor) {
+    //     // Draw the circle
+    //     context.beginPath();
+    //     context.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    //     context.fillStyle = fillColor;
+    //     context.fill();
+    //     context.closePath();
+    // }
+
+    // in front of everything
     let gradient = ctx.createLinearGradient(0, 2, 0, DROP_HEIGHT-DROP_BARRIER);
     gradient.addColorStop(0, '#20082E');
     gradient.addColorStop(1, '#20082E00');
@@ -276,13 +335,6 @@ function drawOntop() {
     ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_HEIGHT-DROP_BARRIER);
 
     if (!lostGame && compDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) {
-        gradient = ctx.createLinearGradient(0, DROP_HEIGHT, 0, PLAY_AREA_HEIGHT);
-        gradient.addColorStop(0, '#DDE5A700');
-        gradient.addColorStop(1, '#DDE5A710');
-        ctx.fillStyle = gradient;
-        const dropRadius = compDrops.bodies[0].circleRadius ?? 14;
-        ctx.fillRect(stackX -dropRadius, DROP_HEIGHT, dropRadius * 2, PLAY_AREA_HEIGHT);
-
         ctx.fillStyle = '#20082E90';
         ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
 
@@ -403,8 +455,8 @@ function newSphere(pos, pickedProperties, isStatic, growPercent) {
     });
     if (growPercent !== undefined) { 
         Body.scale(sphere, growPercent, growPercent);
-        sphere.render.sprite.xScale = 2 - growPercent;
-        sphere.render.sprite.yScale = 2 - growPercent;
+        // sphere.render.sprite.xScale = 2 - growPercent;
+        // sphere.render.sprite.yScale = 2 - growPercent;
         sphere.growPercent = growPercent; 
     };
     return sphere;
