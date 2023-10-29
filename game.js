@@ -5,6 +5,7 @@ const PLAY_AREA_HEIGHT = 600; // make sure to also update the css
 const PLAY_AREA_WIDTH = 500;
 
 const GRAVITY_MULT = 1.2;
+const TICKS_UNTIL_STACK_FOLLOW = 10;
 const MS_UNTIL_LOST = 2000;
 const MS_UNTIL_MERGE = 300;
 const MERGE_LERP_BIAS = 0.3 // 0 means the older/lower sphere, 1 means the newer/higher sphere
@@ -110,7 +111,7 @@ let score = 0;
 let lostGame = false;
 let lostGameTimestamp = null;
 let reachedTopTimestamp = null;
-let lastTickTime = Common.now();
+let ticksCountdownUntilFollow = null;
 let highestID = 0;
 
 
@@ -422,26 +423,26 @@ function advancePlannedMerges(mergesArray) {
 function updateStackState() {
     const drop_until = DROP_HEIGHT - DROP_BARRIER;
 
-    // apply every x ms
-    if (Common.now() >= lastTickTime + 1 && compDrops.bodies.length > 0) {
-
-        const stackLowerEdge = compDrops.bodies[0].bounds.max.y;
-        
-        if (stackLowerEdge < drop_until) {
-            ticksToNextDrop--;
-            if (ticksToNextDrop <= 0) Composite.translate(compDrops, {x: 0, y: 5});
-        } else {
-            ticksToNextDrop = 10;
-            if (stackLowerEdge !== drop_until) Composite.translate(compDrops, {x: 0, y: drop_until - stackLowerEdge});
+    // rest follow if lowest one has been dropped, with a bit of a delay
+    if (ticksCountdownUntilFollow !== null) {
+        ticksCountdownUntilFollow--;
+        if (ticksCountdownUntilFollow <= 0) {
+            const stackLowerEdge = compDrops.bodies[0].bounds.max.y;
+            if (stackLowerEdge < drop_until) {
+                Composite.translate(compDrops, {x: 0, y: 5});
+            } else {
+                if (stackLowerEdge !== drop_until) Composite.translate(compDrops, {x: 0, y: drop_until - stackLowerEdge});
+                ticksCountdownUntilFollow = null;
+            }
         }
-
-        lastTickTime = Common.now();
     }
 
     // drop lowest
     if (dropScheduled && compDrops.bodies[0].bounds.max.y >= drop_until - 0.5) {
         dropSphereFromStack();
+        if (compDrops.bodies.length > 0) ticksCountdownUntilFollow = TICKS_UNTIL_STACK_FOLLOW;
     }
+
     if (!lostGame) dropScheduled = false;
 }
 
@@ -527,8 +528,16 @@ function moveStackX(newX) {
 
     stackX = newX;
 
-    for (const body of compDrops.bodies) {
-        Body.setPosition(body, {x: stackX, y: body.position.y})
-    }
+    compDrops.bodies.forEach((body, index) => {
+        if (ticksCountdownUntilFollow === null) { // not in midair
+            const dir = (index % 2 === 0) ? 1 : -1;
+            const deltaPosX = stackX - body.position.x;
+            const rotAngle = Math.PI * (deltaPosX / body.circleRadius) * 0.5 * dir;
+            Body.setAngle(body, body.angle + rotAngle % (Math.PI * 2));
+        }
+
+        Body.setPosition(body, {x: stackX, y: body.position.y});
+        
+    });
 }
 
