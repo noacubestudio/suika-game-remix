@@ -6,7 +6,7 @@ const PLAY_AREA_WIDTH = 500;
 
 const GRAVITY_MULT = 1.2;
 const TICKS_UNTIL_STACK_FOLLOW = 10;
-const MS_UNTIL_LOST = 2000;
+const MS_UNTIL_LOST = 2200;
 const MS_UNTIL_MERGE = 300;
 const MERGE_LERP_BIAS = 0.3 // 0 means the older/lower sphere, 1 means the newer/higher sphere
 
@@ -38,6 +38,7 @@ const Engine = Matter.Engine,
     Common = Matter.Common,
     Composite = Matter.Composite,
     Composites = Matter.Composites,
+    Constraint = Matter.Constraint,
     Bodies = Matter.Bodies,
     Body = Matter.Body;
 
@@ -364,10 +365,21 @@ function spheresCollided(bodyA, bodyB) {
     ageSpheres.old.mergeTarget = ageSpheres.new;
     ageSpheres.new.mergeTarget = ageSpheres.old;
 
-    // mark as removed remove
+    // mark as removed
     bodyA.removeTimestamp = Common.now(); 
     bodyB.removeTimestamp = Common.now();
     scheduledMerges.push({orderedBodies: [ageSpheres.old, ageSpheres.new], timestamp: Common.now()});
+
+    // add constraint between them to glue them until the merge actually happens
+    const constraint = Constraint.create({
+        bodyA: ageSpheres.old,
+        bodyB: ageSpheres.new,
+        stiffness: 0.5,
+        damping: 0.2
+    });
+
+    Composite.add(compWorld, constraint);
+    //console.log(compWorld.constraints.length)
 }
 
 function lerpVec(vec1, vec2, amount) {
@@ -403,6 +415,12 @@ function advancePlannedMerges(mergesArray) {
                 Body.setVelocity(mergedSphere, newVelocity);
                 bodiesGroup.add = mergedSphere;
             } 
+
+            // remove constraint first
+            const constraintToRemove = compWorld.constraints.find((c) => {
+                return (c.bodyA === a || c.bodyB === b);
+            });
+            if (constraintToRemove !== undefined) Composite.remove(compWorld, constraintToRemove);
 
             // time to merge
             Composite.remove(compWorld, a);
