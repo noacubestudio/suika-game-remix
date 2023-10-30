@@ -374,8 +374,8 @@ function spheresCollided(bodyA, bodyB) {
     const constraint = Constraint.create({
         bodyA: ageSpheres.old,
         bodyB: ageSpheres.new,
-        stiffness: 0.5,
-        damping: 0.2
+        stiffness: 0.2,
+        damping: 0.5
     });
 
     Composite.add(compWorld, constraint);
