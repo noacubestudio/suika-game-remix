@@ -78,10 +78,10 @@ const mainCanvas = document.getElementById('canvas-container');
 const mainCtx = mainCanvas.getContext('2d');
 mainCanvas.width = PLAY_AREA_WIDTH;
 mainCanvas.height = PLAY_AREA_HEIGHT + DROP_HEIGHT;
-const testSprites = {};
-testSprites.bg = new Image();
-    testSprites.bg.src = './img/bg.png';
-testSprites.sphere = Array.from({ length: 11 }, (_, index) => {
+const ctxSprites = {};
+ctxSprites.bg = new Image();
+    ctxSprites.bg.src = './img/bg.png';
+ctxSprites.sphere = Array.from({ length: 11 }, (_, index) => {
     const img = new Image();
     img.src = `./img/ball${index + 1}.png`;
     return img;
@@ -275,7 +275,7 @@ function renderSceneToCanvas(ctx) {
     ctx.clearRect(0, 0, PLAY_AREA_WIDTH, PLAY_AREA_HEIGHT + DROP_HEIGHT);
 
     // background
-    ctx.drawImage(testSprites.bg, 0, 0);
+    ctx.drawImage(ctxSprites.bg, 0, 0);
 
     // line to indicate where you next drop
     if (!lostGame && compDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) { 
@@ -312,7 +312,9 @@ function renderSceneToCanvas(ctx) {
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.rotate(body.angle)
-        ctx.drawImage(testSprites.sphere[body.stage - 1], - r, - r, r * 2, r * 2);
+        const sprite = ctxSprites.sphere[body.stage - 1];
+        const spriteScale = 0.5;
+        ctx.drawImage(sprite, - sprite.width * spriteScale * 0.5, - sprite.height * spriteScale * 0.5, sprite.width * spriteScale, sprite.height * spriteScale);
         // ctx.fillStyle = 'black';
         // ctx.fillText(body.dropID ?? '', 0, 0)
         ctx.restore();
