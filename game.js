@@ -289,17 +289,32 @@ function renderSceneToCanvas(ctx) {
     }
 
     // foreground
+    ctx.fillStyle = "#20082EA0";
+    compDrops.bodies.forEach((body) => { renderSphereShadow(ctx, body); });
+    compWorld.bodies.forEach((body) => { renderSphereShadow(ctx, body); });
 
-    compDrops.bodies.forEach((body) => {
-        renderSphereBody(ctx, body);
-    });
+    compDrops.bodies.forEach((body, index) => { renderSphereBody(ctx, body, index); });
+    compWorld.bodies.forEach((body) => { renderSphereBody(ctx, body); });
 
-    compWorld.bodies.forEach((body) => {
-        renderSphereBody(ctx, body);
-    });
+    function renderSphereShadow(ctx, body) {
+        const r = body.circleRadius + 4;
+        let p = { x: body.position.x, y: body.position.y};
+
+        if (body.removeTimestamp !== undefined && !body.destination) {
+            const mergeDonePercent = (Common.now() - body.removeTimestamp) / MS_UNTIL_MERGE;
+            const mergeCurve = (Math.max(0, mergeDonePercent - 0.5) * 2) ** 4; // wait half the merge wait time, then accelerate towards destination
+            const destPosition = body.mergeTarget.position;
+            const currentMergePosition = lerpVec(p, destPosition, mergeCurve * (1-MERGE_LERP_BIAS));
+            p = currentMergePosition;
+        }
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
+        ctx.fill();
+    }
 
     function renderSphereBody(ctx, body) {
-        const r = body.circleRadius * (body.growPercent ?? 1);
+        const r = body.circleRadius;
         let p = { x: body.position.x, y: body.position.y };
 
         if (body.removeTimestamp !== undefined && !body.destination) {
@@ -312,12 +327,21 @@ function renderSceneToCanvas(ctx) {
 
         ctx.save();
         ctx.translate(p.x, p.y);
-        ctx.rotate(body.angle)
+        const visualRotationAdd = (p.x / body.circleRadius) * Math.PI * 0.5;
+        ctx.rotate(body.angle + visualRotationAdd);
         const sprite = ctxSprites.sphere[body.stage - 1];
         const spriteScale = 0.5;
         ctx.drawImage(sprite, - sprite.width * spriteScale * 0.5, - sprite.height * spriteScale * 0.5, sprite.width * spriteScale, sprite.height * spriteScale);
         // ctx.fillStyle = 'black';
         // ctx.fillText(body.dropID ?? '', 0, 0)
+        if (body.removeTimestamp !== undefined) {
+            const mergeAnimPercentage = (Common.now() - body.removeTimestamp) / MS_UNTIL_MERGE;
+            console.log(mergeAnimPercentage)
+            ctx.fillStyle = (Math.sin((mergeAnimPercentage*4) ** 2) > 0) ? '#ffffff' : '#ffffff20';
+            ctx.beginPath();
+            ctx.arc(0, 0, r, 0, 2 * Math.PI);
+            ctx.fill();
+        }
         ctx.restore();
     }
 
@@ -483,7 +507,7 @@ function dropSphereFromStack() {
     if (compDrops.bodies.length > 0) moveStackX(inputX);
 }
 
-function newSphere(pos, pickedProperties, isStatic, growPercent) {
+function newSphere(pos, pickedProperties, isStatic) {
     const startRadius = pickedProperties.radius;
     const sphere = Bodies.circle(pos.x, pos.y, startRadius, {
         density: pickedProperties.density,
@@ -498,12 +522,6 @@ function newSphere(pos, pickedProperties, isStatic, growPercent) {
         points: pickedProperties.points,
         sound: pickedProperties.sound
     });
-    // if (growPercent !== undefined) { 
-    //     //Body.scale(sphere, growPercent, growPercent);
-    //     // sphere.render.sprite.xScale = 2 - growPercent;
-    //     // sphere.render.sprite.yScale = 2 - growPercent;
-    //     //sphere.growPercent = growPercent; 
-    // };
     return sphere;
 }
 
@@ -549,12 +567,12 @@ function moveStackX(newX) {
     stackX = newX;
 
     compDrops.bodies.forEach((body, index) => {
-        if (ticksCountdownUntilFollow === null) { // not in midair
-            const dir = (index % 2 === 0) ? 1 : -1;
-            const deltaPosX = stackX - body.position.x;
-            const rotAngle = Math.PI * (deltaPosX / body.circleRadius) * 0.5 * dir;
-            Body.setAngle(body, body.angle + rotAngle % (Math.PI * 2));
-        }
+        // if (ticksCountdownUntilFollow === null) { // not in midair
+        //     const dir = (index % 2 === 0) ? 1 : -1;
+        //     const deltaPosX = stackX - body.position.x;
+        //     const rotAngle = Math.PI * (deltaPosX / body.circleRadius) * 0.5 * dir;
+        //     Body.setAngle(body, body.angle + rotAngle % (Math.PI * 2));
+        // }
 
         Body.setPosition(body, {x: stackX, y: body.position.y});
         
