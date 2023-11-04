@@ -5,10 +5,16 @@ const PLAY_AREA_HEIGHT = 600; // make sure to also update the css
 const PLAY_AREA_WIDTH = 500;
 
 const GRAVITY_MULT = 1.2;
-const TICKS_UNTIL_STACK_FOLLOW = 10;
-const MS_UNTIL_LOST = 2200;
-const MS_UNTIL_MERGE = 300;
 const MERGE_LERP_BIAS = 0.3 // 0 means the older/lower sphere, 1 means the newer/higher sphere
+
+
+const TICKS_UNTIL_SPHERES_FOLLOW = 10;
+const TICKS_UNTIL_LOST = 100;
+const TICKS_UNTIL_MERGE = 20;
+let currentTick = 0;
+let tickWhereLastSphereDropped = null;
+let tickWhereTopLastReached = null;
+
 
 const BAG_ITEM_COUNT = 5;
 const SPHERES_CONFIG = [
@@ -105,14 +111,11 @@ const compWorld = Composite.create();
 let randomBag = [];
 let dropScheduled = false;
 let scheduledMerges = [];
-let ticksToNextDrop = 10;
+
 let inputX = null;
 let stackX = PLAY_AREA_WIDTH / 2;
 let score = 0;
 let lostGame = false;
-let lostGameTimestamp = null;
-let reachedTopTimestamp = null;
-let ticksCountdownUntilFollow = null;
 let highestID = 0;
 
 
@@ -135,24 +138,22 @@ Events.on(engine, 'beforeUpdate', (event) => {
         dropScheduled = false;
     }
 
-    // if (lostGame && Common.now() - lostGameTimestamp > 4000) {
-    //     Runner.stop(runner);
-    // }
-
     // check bounds
     const droppedSpheresTopY = (compWorld.bodies.length > 0) ? Composite.bounds(compWorld).min.y : Infinity;
     
     if (droppedSpheresTopY <= DROP_HEIGHT) {
-        if (reachedTopTimestamp === null) {
+        if (tickWhereTopLastReached === null) {
             // initial reach
-            reachedTopTimestamp = Common.now();
+            tickWhereTopLastReached = currentTick;
         } else {
-            if (Common.now() - reachedTopTimestamp > MS_UNTIL_LOST) endGame();
+            if (currentTick - tickWhereTopLastReached > TICKS_UNTIL_LOST) endGame();
         }
     } else {
         // all spheres are lower
-        reachedTopTimestamp = null;
+        tickWhereTopLastReached = null;
     }
+
+    currentTick += 1;
 });
 
 Events.on(engine, 'afterUpdate', (event) => { renderSceneToCanvas(mainCtx) });
@@ -266,7 +267,6 @@ function endGame() {
     if (!lostGame) {
         document.getElementById('score-text').style.color = '#55ee33';
         lostGame = true;
-        lostGameTimestamp = Common.now();
         dropScheduled = true;
     }
 }
@@ -300,8 +300,8 @@ function renderSceneToCanvas(ctx) {
         const r = body.circleRadius + 4;
         let p = { x: body.position.x, y: body.position.y};
 
-        if (body.removeTimestamp !== undefined && !body.destination) {
-            const mergeDonePercent = (Common.now() - body.removeTimestamp) / MS_UNTIL_MERGE;
+        if (body.tickWhereCollided !== undefined && !body.destination) {
+            const mergeDonePercent = (currentTick - body.tickWhereCollided) / TICKS_UNTIL_MERGE;
             const mergeCurve = (Math.max(0, mergeDonePercent - 0.5) * 2) ** 4; // wait half the merge wait time, then accelerate towards destination
             const destPosition = body.mergeTarget.position;
             const currentMergePosition = lerpVec(p, destPosition, mergeCurve * (1-MERGE_LERP_BIAS));
@@ -317,8 +317,8 @@ function renderSceneToCanvas(ctx) {
         const r = body.circleRadius;
         let p = { x: body.position.x, y: body.position.y };
 
-        if (body.removeTimestamp !== undefined && !body.destination) {
-            const mergeDonePercent = (Common.now() - body.removeTimestamp) / MS_UNTIL_MERGE;
+        if (body.tickWhereCollided !== undefined && !body.destination) {
+            const mergeDonePercent = (currentTick - body.tickWhereCollided) / TICKS_UNTIL_MERGE;
             const mergeCurve = (Math.max(0, mergeDonePercent - 0.5) * 2) ** 4; // wait half the merge wait time, then accelerate towards destination
             const destPosition = body.mergeTarget.position;
             const currentMergePosition = lerpVec(p, destPosition, mergeCurve * (1-MERGE_LERP_BIAS));
@@ -334,9 +334,8 @@ function renderSceneToCanvas(ctx) {
         ctx.drawImage(sprite, - sprite.width * spriteScale * 0.5, - sprite.height * spriteScale * 0.5, sprite.width * spriteScale, sprite.height * spriteScale);
         // ctx.fillStyle = 'black';
         // ctx.fillText(body.dropID ?? '', 0, 0)
-        if (body.removeTimestamp !== undefined) {
-            const mergeAnimPercentage = (Common.now() - body.removeTimestamp) / MS_UNTIL_MERGE;
-            console.log(mergeAnimPercentage)
+        if (body.tickWhereCollided !== undefined) {
+            const mergeAnimPercentage = (currentTick - body.tickWhereCollided) / TICKS_UNTIL_MERGE;
             ctx.fillStyle = (Math.sin((mergeAnimPercentage*4) ** 2) > 0) ? '#ffffff' : '#ffffff20';
             ctx.beginPath();
             ctx.arc(0, 0, r, 0, 2 * Math.PI);
@@ -365,9 +364,9 @@ function renderSceneToCanvas(ctx) {
         ctx.fillStyle = '#20082E90';
         ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
 
-        if (reachedTopTimestamp !== null) {
-            const intensity = (Common.now() - reachedTopTimestamp) / MS_UNTIL_LOST;
-            const blinkRed = Math.sin(Common.now() / 30);
+        if (tickWhereTopLastReached !== null) {
+            const intensity = (currentTick - tickWhereTopLastReached) / TICKS_UNTIL_LOST;
+            const blinkRed = Math.sin(currentTick / 4);
             ctx.fillStyle = `rgba(255, 0, 0, ${blinkRed * intensity})`;;
             ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
         }
@@ -378,7 +377,7 @@ function renderSceneToCanvas(ctx) {
 function spheresCollided(bodyA, bodyB) {
 
     // already merging
-    if (bodyA.removeTimestamp || bodyB.removeTimestamp) return;
+    if (bodyA.tickWhereCollided || bodyB.tickWhereCollided) return;
 
     // mark which one should be the destination and which one mostly moves
     const condition = (bodyA.dropID === highestID || bodyB.dropID === highestID) // if one was last dropped
@@ -390,9 +389,9 @@ function spheresCollided(bodyA, bodyB) {
     ageSpheres.new.mergeTarget = ageSpheres.old;
 
     // mark as removed
-    bodyA.removeTimestamp = Common.now(); 
-    bodyB.removeTimestamp = Common.now();
-    scheduledMerges.push({orderedBodies: [ageSpheres.old, ageSpheres.new], timestamp: Common.now()});
+    bodyA.tickWhereCollided = currentTick; 
+    bodyB.tickWhereCollided = currentTick;
+    scheduledMerges.push({orderedBodies: [ageSpheres.old, ageSpheres.new], tickWhereCollided: currentTick});
 
     // add constraint between them to glue them until the merge actually happens
     const constraint = Constraint.create({
@@ -419,7 +418,7 @@ function advancePlannedMerges(mergesArray) {
     mergesArray.forEach((bodiesGroup) => {
 
         // final moment, do the merge
-        if (Common.now() - bodiesGroup.timestamp >= MS_UNTIL_MERGE) {
+        if (currentTick - bodiesGroup.tickWhereCollided >= TICKS_UNTIL_MERGE) {
 
             const a = bodiesGroup.orderedBodies[0]; const b = bodiesGroup.orderedBodies[1];
 
@@ -468,15 +467,14 @@ function updateStackState() {
     const drop_until = DROP_HEIGHT - DROP_BARRIER;
 
     // rest follow if lowest one has been dropped, with a bit of a delay
-    if (ticksCountdownUntilFollow !== null) {
-        ticksCountdownUntilFollow--;
-        if (ticksCountdownUntilFollow <= 0) {
+    if (tickWhereLastSphereDropped !== null) { 
+        if (currentTick - tickWhereLastSphereDropped >= TICKS_UNTIL_SPHERES_FOLLOW) {
             const stackLowerEdge = compDrops.bodies[0].bounds.max.y;
             if (stackLowerEdge < drop_until) {
                 Composite.translate(compDrops, {x: 0, y: 5});
             } else {
                 if (stackLowerEdge !== drop_until) Composite.translate(compDrops, {x: 0, y: drop_until - stackLowerEdge});
-                ticksCountdownUntilFollow = null;
+                tickWhereLastSphereDropped = null;
             }
         }
     }
@@ -484,7 +482,7 @@ function updateStackState() {
     // drop lowest
     if (dropScheduled && compDrops.bodies[0].bounds.max.y >= drop_until - 0.5) {
         dropSphereFromStack();
-        if (compDrops.bodies.length > 0) ticksCountdownUntilFollow = TICKS_UNTIL_STACK_FOLLOW;
+        if (compDrops.bodies.length > 0) tickWhereLastSphereDropped = currentTick;
     }
 
     if (!lostGame) dropScheduled = false;
