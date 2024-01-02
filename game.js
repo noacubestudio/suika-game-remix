@@ -33,8 +33,8 @@ const SPHERES_CONFIG = [
 ];
 
 // load
-const mergeSound = new Audio('pop1.wav');
-mergeSound.volume = 0.5;
+const mergeSound = new Audio('merge-pop.wav');
+const mergeSound2 = new Audio('merge-pop.wav');
 
 // matter.js stuff
 const Engine = Matter.Engine,
@@ -371,7 +371,7 @@ function renderSceneToCanvas(ctx) {
         }
         ctx.translate(p.x, p.y);
         ctx.globalAlpha = 1.0 - animPercentage;
-        ctx.fillStyle = '#77ff99';
+        ctx.fillStyle = (mergeObject.wasTripleMerge) ? '#ffff77' : '#77ff99';
         ctx.strokeStyle = 'black';
         ctx.strokeText("+" + mergeObject.addedScore, 0, - animPercentage * 200);
         ctx.fillText("+" + mergeObject.addedScore, 0, - animPercentage * 200);
@@ -545,7 +545,12 @@ function finalizeOldPlannedMerges() {
             }
 
             // fx
-            mergeSound.play();
+            if (mergeSound.paused) {
+                mergeSound.play();
+            } else {
+                mergeSound2.play();
+            }
+            
             if (addedScore !== 0) {
                 score += addedScore;
                 document.getElementById('score-text').textContent = score;
