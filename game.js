@@ -11,7 +11,7 @@ const MERGE_LERP_BIAS = 0.3 // 0 means the older/lower sphere, 1 means the newer
 const TICKS_UNTIL_SPHERES_FOLLOW = 10;
 const TICKS_UNTIL_LOST = 100;
 const TICKS_UNTIL_MERGE = 20;
-const TICKS_AFTER_MERGE_EFFECT = 20;
+const TICKS_AFTER_MERGE_EFFECT = 30;
 let currentTick = 0;
 let tickWhereLastSphereDropped = null;
 let tickWhereTopLastReached = null;
@@ -99,6 +99,9 @@ let recentMerges = [];
 let inputX = null;
 let stackX = PLAY_AREA_WIDTH / 2;
 let score = 0;
+let scoreSinceLastDrop = 0;
+let highestCombo = 0;
+let mergesSinceLastDrop = 0;
 let lostGame = false;
 let highestID = 0;
 
@@ -371,7 +374,7 @@ function renderSceneToCanvas(ctx) {
         }
         ctx.translate(p.x, p.y);
         ctx.globalAlpha = 1.0 - animPercentage;
-        ctx.fillStyle = (mergeObject.wasTripleMerge) ? '#ffff77' : '#77ff99';
+        ctx.fillStyle = (mergeObject.addedScore > 20) ? '#ffff77' : '#77ff99';
         ctx.strokeStyle = 'black';
         ctx.strokeText("+" + mergeObject.addedScore, 0, - animPercentage * 200);
         ctx.fillText("+" + mergeObject.addedScore, 0, - animPercentage * 200);
@@ -526,22 +529,23 @@ function finalizeOldPlannedMerges() {
                 angle: meanAngleFromTwo(mergeBodiesArr[0].angle, mergeBodiesArr[1].angle, 0.5),
             } : mergeBodiesArr[0];
 
-
             let addedSphere = undefined;
-            let addedScore = 0;
             let stageAfter = dest.stage;
+            let addedScore = 0;
             
+            if (mergesSinceLastDrop > 0) addedScore += 10;
+            mergesSinceLastDrop++;
 
             if (mergeBodiesArr.length > 2) {
                 console.log("this shouldn't happen, 4 bodies or more merging?")
                 return;
             } else if (mergeBodiesArr.length === 2) {
                 //console.log("triple merge!")
-                addedScore = SPHERES_CONFIG[dest.stage].points * 2;
+                addedScore += 30; // SPHERES_CONFIG[dest.stage].points * 2;
                 stageAfter = dest.stage + 1;
             } else {
                 //console.log("merge!");
-                addedScore = SPHERES_CONFIG[dest.stage].points;
+                addedScore += 20; //SPHERES_CONFIG[dest.stage].points;
             }
 
             // fx
@@ -552,8 +556,12 @@ function finalizeOldPlannedMerges() {
             }
             
             if (addedScore !== 0) {
-                score += addedScore;
-                document.getElementById('score-text').textContent = score;
+                scoreSinceLastDrop += addedScore;
+                document.getElementById('score-text').textContent = (score + scoreSinceLastDrop);
+                if (scoreSinceLastDrop > highestCombo) {
+                    highestCombo = scoreSinceLastDrop;
+                    document.getElementById('combo-text').textContent = "MAX COMBO: " + (highestCombo);
+                }
             }
 
             // add, only if not biggest stage of circles
@@ -625,6 +633,9 @@ function updateStackState() {
 
 function dropSphereFromStack() {
     if (compDrops.bodies.length === 0) return;
+    mergesSinceLastDrop = 0;
+    score += scoreSinceLastDrop;
+    scoreSinceLastDrop = 0;
 
     // turn on physics, transfer to comp World
     const lowestSphere = compDrops.bodies[0];

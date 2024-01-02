@@ -25,7 +25,7 @@
             overflow: hidden;
         }
 
-        @media (orientation: portrait) {
+        @media (max-aspect-ratio: 2/3) {
             #canvas-container {
                 width: 90vw; 
                 height: 135vw;
@@ -41,6 +41,18 @@
             font-size: 4vh;
             color: #ff99ff80;
             font-weight: 600;
+            user-select: none;
+        }
+
+        #combo-text {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            font-size: 2vh;
+            color: #ff99ff80;
+            font-weight: 500;
             user-select: none;
         }
 
@@ -76,6 +88,7 @@
     <script src="game.js"></script>
 
     <div id="score-text">0</div>
+    <div id="combo-text"></div>
 
     <div id="game-title">Make 10!</div>
 </body>
