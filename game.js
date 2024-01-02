@@ -11,6 +11,7 @@ const MERGE_LERP_BIAS = 0.3 // 0 means the older/lower sphere, 1 means the newer
 const TICKS_UNTIL_SPHERES_FOLLOW = 10;
 const TICKS_UNTIL_LOST = 100;
 const TICKS_UNTIL_MERGE = 20;
+const TICKS_AFTER_MERGE_EFFECT = 20;
 let currentTick = 0;
 let tickWhereLastSphereDropped = null;
 let tickWhereTopLastReached = null;
@@ -33,6 +34,7 @@ const SPHERES_CONFIG = [
 
 // load
 const mergeSound = new Audio('pop1.wav');
+mergeSound.volume = 0.5;
 
 // matter.js stuff
 const Engine = Matter.Engine,
@@ -62,25 +64,8 @@ Common._seed = (() => {
 })();
 document.getElementById('seed').textContent = "Seed " + Common._seed;
 
-// create renderer
-//const canvas_old = document.getElementById('canvas-container');
-// const render = Render.create({
-//     canvas: canvas,
-//     engine: engine,
-//     options: {
-//         width: PLAY_AREA_WIDTH,
-//         height: PLAY_AREA_HEIGHT + DROP_HEIGHT,
-//         background: '#4A1D60',
-//         wireframes: false,
-//         // showCollisions: true,
-//         // showDebug: true,
-//     }
-// });
-// Render.run(render);
-
 
 // set up rendering
-
 const mainCanvas = document.getElementById('canvas-container');
 const mainCtx = mainCanvas.getContext('2d');
 mainCanvas.width = PLAY_AREA_WIDTH;
@@ -93,8 +78,6 @@ ctxSprites.sphere = Array.from({ length: 11 }, (_, index) => {
     img.src = `./img/ball${index + 1}.png`;
     return img;
 });
-
-
 
 // create runner, simple gameloop
 const runner = Runner.create({
@@ -110,7 +93,8 @@ const compWorld = Composite.create();
 // game state
 let randomBag = [];
 let dropScheduled = false;
-let scheduledMerges = [];
+let plannedMergesAtDestination = new Map();
+let recentMerges = [];
 
 let inputX = null;
 let stackX = PLAY_AREA_WIDTH / 2;
@@ -128,7 +112,7 @@ sceneSetup();
 Events.on(engine, 'beforeUpdate', (event) => {
 
     // do merges
-    scheduledMerges = advancePlannedMerges(scheduledMerges);
+    finalizeOldPlannedMerges();
 
 
     // drop stack of spheres above the lowest to follow
@@ -162,7 +146,7 @@ Events.on(engine, 'collisionStart', (event) => {
     event.pairs.forEach((pair) => {
         // try merge if neither are static and both are the same kind of circle
         if (pair.bodyA.stage === pair.bodyB.stage && pair.bodyA.isStatic === pair.bodyB.isStatic) {
-            spheresCollided(pair.bodyA, pair.bodyB);
+            droppedSameSpheresCollided(pair.bodyA, pair.bodyB);
         }
     });
 });
@@ -274,6 +258,9 @@ function endGame() {
 function renderSceneToCanvas(ctx) {
 
     ctx.clearRect(0, 0, PLAY_AREA_WIDTH, PLAY_AREA_HEIGHT + DROP_HEIGHT);
+    ctx.font = "bold 48px sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineCap = "round";
 
     // background
     ctx.drawImage(ctxSprites.bg, 0, 0);
@@ -296,14 +283,29 @@ function renderSceneToCanvas(ctx) {
     compDrops.bodies.forEach((body, index) => { renderSphereBody(ctx, body, index); });
     compWorld.bodies.forEach((body) => { renderSphereBody(ctx, body); });
 
+    // remove info about merges that are no longer recent, 
+    // then display effects/score popping up for the recent ones
+    let finishedMerges = 0;
+    for (mergeObject of recentMerges)  {
+        const animPercentage = (currentTick - mergeObject.tick) / TICKS_AFTER_MERGE_EFFECT;
+        if (animPercentage < 1) break;
+        finishedMerges++;
+    }
+    if (finishedMerges > 0) {
+        recentMerges = recentMerges.slice(finishedMerges);
+        //console.log("removed", finishedMerges, "now", recentMerges.length)
+    }
+    recentMerges.forEach((mergeObject) => renderMergeEffect(ctx, mergeObject));
+
     function renderSphereShadow(ctx, body) {
         const r = body.circleRadius + 4;
         let p = { x: body.position.x, y: body.position.y};
 
-        if (body.tickWhereCollided !== undefined && !body.destination) {
+        // animate towards merge destination
+        if (body.mergeDestination !== undefined) {
             const mergeDonePercent = (currentTick - body.tickWhereCollided) / TICKS_UNTIL_MERGE;
             const mergeCurve = (Math.max(0, mergeDonePercent - 0.5) * 2) ** 4; // wait half the merge wait time, then accelerate towards destination
-            const destPosition = body.mergeTarget.position;
+            const destPosition = body.mergeDestination.position;
             const currentMergePosition = lerpVec(p, destPosition, mergeCurve * (1-MERGE_LERP_BIAS));
             p = currentMergePosition;
         }
@@ -317,16 +319,18 @@ function renderSceneToCanvas(ctx) {
         const r = body.circleRadius;
         let p = { x: body.position.x, y: body.position.y };
 
-        if (body.tickWhereCollided !== undefined && !body.destination) {
+        // animate towards merge destination
+        if (body.mergeDestination !== undefined) {
             const mergeDonePercent = (currentTick - body.tickWhereCollided) / TICKS_UNTIL_MERGE;
             const mergeCurve = (Math.max(0, mergeDonePercent - 0.5) * 2) ** 4; // wait half the merge wait time, then accelerate towards destination
-            const destPosition = body.mergeTarget.position;
+            const destPosition = body.mergeDestination.position;
             const currentMergePosition = lerpVec(p, destPosition, mergeCurve * (1-MERGE_LERP_BIAS));
             p = currentMergePosition;
         }
 
         ctx.save();
         ctx.translate(p.x, p.y);
+
         const visualRotationAdd = (p.x / body.circleRadius) * Math.PI * 0.5;
         ctx.rotate(body.angle + visualRotationAdd);
         const sprite = ctxSprites.sphere[body.stage - 1];
@@ -342,6 +346,51 @@ function renderSceneToCanvas(ctx) {
             ctx.fill();
         }
         ctx.restore();
+
+        ctx.lineWidth = r*0.4;
+        ctx.strokeStyle = '#ffffff50'
+        ctx.globalCompositeOperation = 'soft-light'
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r*0.8, Math.PI*1.1, Math.PI*1.6);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r*0.8, Math.PI*1.3, Math.PI*1.4);
+        ctx.stroke();
+        ctx.lineWidth = 4;
+        ctx.globalCompositeOperation = 'source-over'
+    }
+
+    function renderMergeEffect(ctx, mergeObject) {
+        const animPercentage = (currentTick - mergeObject.tick) / TICKS_AFTER_MERGE_EFFECT;
+        if (animPercentage > 1) return;
+
+        ctx.save();
+        const p = {
+            x: mergeObject.position.x ?? PLAY_AREA_WIDTH  * 0.5, 
+            y: mergeObject.position.y ?? PLAY_AREA_HEIGHT * 0.2
+        }
+        ctx.translate(p.x, p.y);
+        ctx.globalAlpha = 1.0 - animPercentage;
+        ctx.fillStyle = '#77ff99';
+        ctx.strokeStyle = 'black';
+        ctx.strokeText("+" + mergeObject.addedScore, 0, - animPercentage * 200);
+        ctx.fillText("+" + mergeObject.addedScore, 0, - animPercentage * 200);
+       
+        const easedPercentage = easeOutExpo(animPercentage);
+        ctx.strokeStyle = 'white';
+        ctx.globalAlpha = 1.0 - easedPercentage;
+        ctx.beginPath();
+        ctx.arc(0, 0, mergeObject.circleRadius * (1.0 + easedPercentage * 0.5), 0, Math.PI*2);
+        ctx.stroke();
+        if (mergeObject.wasTripleMerge) {
+            ctx.beginPath();
+            ctx.arc(0, 0, mergeObject.circleRadius * (1.0 + easedPercentage * 1), 0, Math.PI*2);
+            ctx.stroke();
+        }
+
+        ctx.globalAlpha = 1.0;
+        ctx.restore();
+        
     }
 
     // function ctxCircle(context, centerX, centerY, radius, fillColor) {
@@ -374,24 +423,38 @@ function renderSceneToCanvas(ctx) {
     }
 }
 
-function spheresCollided(bodyA, bodyB) {
+function droppedSameSpheresCollided(bodyA, bodyB) {
 
     // already merging
-    if (bodyA.tickWhereCollided || bodyB.tickWhereCollided) return;
+    if (bodyA.tickWhereCollided || bodyB.tickWhereCollided) {
+        if (bodyA.inTripleMerge || bodyB.inTripleMerge) {
+            //console.log("already in triple merge, won't add to quadruple merge")
+            return; // already in triple merge
+        }
+        if (bodyA.tickWhereCollided === undefined) {
+            // bodyB now has a new merge partner
+            //console.log("todo new merge for body B", bodyA, bodyB)
+            mergeNewWithExistingMergePartner(bodyA, bodyB);
+        } else if (bodyB.tickWhereCollided === undefined) {
+            // bodyA now has a new merge partner
+            //console.log("todo new merge for body A", bodyA, bodyB)
+            mergeNewWithExistingMergePartner(bodyB, bodyA);
+        }
+        return; // both were already merging
+    }
 
     // mark which one should be the destination and which one mostly moves
     const condition = (bodyA.dropID === highestID || bodyB.dropID === highestID) // if one was last dropped
         ? (bodyA.dropID < bodyB.dropID) // compare age
         : (bodyA.position.y > bodyB.position.y); // mark lower one as older
     const ageSpheres = condition ? {old: bodyA, new: bodyB} : {old: bodyB, new: bodyA};
-    ageSpheres.old.destination = true;
-    ageSpheres.old.mergeTarget = ageSpheres.new;
-    ageSpheres.new.mergeTarget = ageSpheres.old;
+    ageSpheres.new.mergeDestination = ageSpheres.old;
 
-    // mark as removed
+    // mark as merging, schedule the actual replacement of the bodies
     bodyA.tickWhereCollided = currentTick; 
     bodyB.tickWhereCollided = currentTick;
-    scheduledMerges.push({orderedBodies: [ageSpheres.old, ageSpheres.new], tickWhereCollided: currentTick});
+    plannedMergesAtDestination.set(ageSpheres.old, [ageSpheres.new]);
+    //console.log('merge sources', plannedMergesAtDestination.get(ageSpheres.old));
 
     // add constraint between them to glue them until the merge actually happens
     const constraint = Constraint.create({
@@ -402,7 +465,44 @@ function spheresCollided(bodyA, bodyB) {
     });
 
     Composite.add(compWorld, constraint);
-    //console.log(compWorld.constraints.length)
+}
+
+function mergeNewWithExistingMergePartner(newBody, existingMergeBody) {
+    // has a destination
+    const mergeSources = [];
+    if (existingMergeBody.mergeDestination !== undefined) {
+        // flip which one is the destination in the existing merge partners first
+        const otherBody = existingMergeBody.mergeDestination;
+        existingMergeBody.mergeDestination = undefined;
+        plannedMergesAtDestination.delete(otherBody);
+        otherBody.mergeDestination = existingMergeBody;
+        otherBody.inTripleMerge = true;
+        mergeSources.push(otherBody);
+    }
+    // the existing merge body that was collided with again is now always the destination
+    newBody.mergeDestination = existingMergeBody;
+    newBody.tickWhereCollided = currentTick; //WIP, should really apply to all
+    newBody.inTripleMerge = true;
+    existingMergeBody.inTripleMerge = true;
+    mergeSources.push(newBody);
+    //plannedMergesAtDestination.get(existingMergeBody)
+    //console.log("mergeDest", plannedMergesAtDestination.get(existingMergeBody))
+    if (plannedMergesAtDestination.has(existingMergeBody)) {
+        // add new body
+        plannedMergesAtDestination.get(existingMergeBody).push(newBody);
+    } else {
+        plannedMergesAtDestination.set(existingMergeBody, mergeSources);
+    }
+
+    // add constraint between them to glue them until the merge actually happens
+    const constraint = Constraint.create({
+        bodyA: newBody,
+        bodyB: existingMergeBody,
+        stiffness: 0.2,
+        damping: 0.5
+    });
+
+    Composite.add(compWorld, constraint);
 }
 
 function lerpVec(vec1, vec2, amount) {
@@ -412,55 +512,85 @@ function lerpVec(vec1, vec2, amount) {
     }
 }
 
-function advancePlannedMerges(mergesArray) {
+function finalizeOldPlannedMerges() {
 
-    const newArray = [];
-    mergesArray.forEach((bodiesGroup) => {
+    plannedMergesAtDestination.forEach((mergeBodiesArr, mergeTarget) => {
 
         // final moment, do the merge
-        if (currentTick - bodiesGroup.tickWhereCollided >= TICKS_UNTIL_MERGE) {
+        if (currentTick - mergeTarget.tickWhereCollided >= TICKS_UNTIL_MERGE) {
 
-            const a = bodiesGroup.orderedBodies[0]; const b = bodiesGroup.orderedBodies[1];
+            const dest = mergeTarget; 
+            const mergeSourcesAverage = (mergeBodiesArr.length === 2) ? {
+                position: lerpVec(mergeBodiesArr[0].position, mergeBodiesArr[1].position, 0.5),
+                velocity: lerpVec(mergeBodiesArr[0].velocity, mergeBodiesArr[1].velocity, 0.5),
+                angle: meanAngleFromTwo(mergeBodiesArr[0].angle, mergeBodiesArr[1].angle, 0.5),
+            } : mergeBodiesArr[0];
+
+
+            let addedSphere = undefined;
+            let addedScore = 0;
+            let stageAfter = dest.stage;
+            
+
+            if (mergeBodiesArr.length > 2) {
+                console.log("this shouldn't happen, 4 bodies or more merging?")
+                return;
+            } else if (mergeBodiesArr.length === 2) {
+                //console.log("triple merge!")
+                addedScore = SPHERES_CONFIG[dest.stage].points * 2;
+                stageAfter = dest.stage + 1;
+            } else {
+                //console.log("merge!");
+                addedScore = SPHERES_CONFIG[dest.stage].points;
+            }
 
             // fx
             mergeSound.play();
-            score += a.points;
-            document.getElementById('score-text').textContent = score;
+            if (addedScore !== 0) {
+                score += addedScore;
+                document.getElementById('score-text').textContent = score;
+            }
 
             // add, only if not biggest stage of circles
-            if (a.stage !== SPHERES_CONFIG[SPHERES_CONFIG.length-1].stage) {
-                const newPosition = lerpVec(a.position,b.position, MERGE_LERP_BIAS);
-                const newVelocity = lerpVec(a.velocity, b.velocity, MERGE_LERP_BIAS);
+            if (stageAfter < SPHERES_CONFIG[SPHERES_CONFIG.length-1].stage) {
+                const newPosition = lerpVec(dest.position, mergeSourcesAverage.position, MERGE_LERP_BIAS);
+                const newVelocity = lerpVec(dest.velocity, mergeSourcesAverage.velocity, MERGE_LERP_BIAS);
 
-                const mergedSphere = newSphere(newPosition, SPHERES_CONFIG[a.stage], false);
-                mergedSphere.dropID = -1;
-                Body.setAngle(mergedSphere, meanAngleFromTwo(a.angle, b.angle));
-                Body.setVelocity(mergedSphere, newVelocity);
-                bodiesGroup.add = mergedSphere;
+                addedSphere = createNewSphere(newPosition, SPHERES_CONFIG[stageAfter], false);
+                addedSphere.dropID = -1;
+                Body.setAngle(addedSphere, meanAngleFromTwo(dest.angle, mergeSourcesAverage.angle));
+                Body.setVelocity(addedSphere, newVelocity);
             } 
 
-            // remove constraint first
-            const constraintToRemove = compWorld.constraints.find((c) => {
-                return (c.bodyA === a || c.bodyB === b);
+            plannedMergesAtDestination.delete(mergeTarget);
+            recentMerges.push(
+                {tick: currentTick, 
+                    addedScore, 
+                    position: addedSphere.position,
+                    circleRadius: addedSphere.circleRadius,
+                    wasTripleMerge: (mergeBodiesArr.length > 1)
+                });
+
+            // remove constraints and bodies first
+            const constraintsToRemove = compWorld.constraints.filter((c) => {
+                return (c.bodyA === dest || c.bodyB === dest);
             });
-            if (constraintToRemove !== undefined) Composite.remove(compWorld, constraintToRemove);
-
-            // time to merge
-            Composite.remove(compWorld, a);
-            Composite.remove(compWorld, b);
-            if (bodiesGroup.add !== undefined) {
-                Composite.add(compWorld, bodiesGroup.add);
+            constraintsToRemove.forEach((constraint) => {
+                //console.log("constraint:", constraint);
+                Composite.remove(compWorld, constraint);
+            });
+            mergeBodiesArr.forEach((sourceBody) => {
+                // for each body that was approaching the target body, remove the constraint and the body
+                Composite.remove(compWorld, sourceBody);
+            });
+            // also remove the target itself
+            Composite.remove(compWorld, dest);
+            // add new sphere
+            if (addedSphere !== undefined) {
+                Composite.add(compWorld, addedSphere);
             }
-            // console.log("before", compWorld.bodies.map((body) => {return body.id} ));
-            // console.log("rem", bodiesGroup.a.id, bodiesGroup.rem2.id, "add", bodiesGroup.add.id);
-            // console.log("after", compWorld.bodies.map((body) => {return body.id} ));
-
-        } else {
-            // add back
-            newArray.push(bodiesGroup);
         }
     });
-    return newArray;
 }
 
 function updateStackState() {
@@ -505,7 +635,7 @@ function dropSphereFromStack() {
     if (compDrops.bodies.length > 0) moveStackX(inputX);
 }
 
-function newSphere(pos, pickedProperties, isStatic) {
+function createNewSphere(pos, pickedProperties, isStatic) {
     const startRadius = pickedProperties.radius;
     const sphere = Bodies.circle(pos.x, pos.y, startRadius, {
         density: pickedProperties.density,
@@ -552,7 +682,7 @@ function pushSphereFromBag(dest, pickedProperties) {
         y: prevTop - pickedProperties.radius
     };
 
-    const addedSphere = newSphere(pos, pickedProperties, true);
+    const addedSphere = createNewSphere(pos, pickedProperties, true);
     Body.setAngle(addedSphere, Common.shuffle([-0.02, 0.02, -0.04, 0.04])[0]*Math.PI);
     Composite.add(dest, addedSphere);
 }
@@ -577,3 +707,6 @@ function moveStackX(newX) {
     });
 }
 
+function easeOutExpo(x) {
+    return x === 1 ? 1 : 1 - Math.pow(2, -10 * x);
+}
