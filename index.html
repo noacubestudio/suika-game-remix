@@ -7,7 +7,15 @@
 
 
     <style>
+        @font-face {
+            font-family: 'Sono';
+            src: url('Sono-Variable.ttf') format('truetype');
+        }
+
         body {
+            font-family: 'Sono', sans-serif;
+            font-variation-settings: 'MONO' 0;
+            font-feature-settings: "ss05";
             margin: 0;
             overflow: hidden;
             display: flex;
@@ -16,7 +24,7 @@
             height: 100vh;
             background-color: #20082E;
             user-select: none;
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            /* font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; */
         }
 
         #canvas-container-matter-render, #canvas-container {
@@ -34,24 +42,24 @@
 
         #score-text {
             position: absolute;
-            top: 40px;
+            top: 1vh;
             left: 50%;
             transform: translateX(-50%);
             text-align: center;
-            font-size: 4vh;
-            color: #ff99ff80;
-            font-weight: 600;
+            font-size: 5vh;
+            color: #ff99ff;
+            font-weight: 500;
             user-select: none;
         }
 
         #combo-text {
             position: absolute;
-            top: 80px;
+            top: 7vh;
             left: 50%;
             transform: translateX(-50%);
             text-align: center;
             font-size: 2vh;
-            color: #ff99ff80;
+            color: #ff99ff;
             font-weight: 500;
             user-select: none;
         }
@@ -60,25 +68,26 @@
             position: absolute;
             top: 15px;
             left: 20px;
-            font-size: 2vh;
-            color: #ff99ff90;
-            font-weight: 600;
+            font-size: 2.5vh;
+            color: #d974dc;
+            font-weight: 500;
             user-select: none;
         }
 
         #seed {
             position: absolute;
-            top: 15px;
+            bottom: 1vh;
             right: 20px;
-            font-size: 2vh;
-            color: #ff99ff90;
+            font-size: 1.6vh;
+            font-weight: 500;
+            color: #d974dc90;
             text-align: right;
             user-select: none;
         }
     </style>
 </head>
 <body>
-    <div id="seed">0</div>
+    <div id="seed">Seed?</div>
 
     <script src="matter.js"></script>
 
