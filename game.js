@@ -16,13 +16,13 @@ let currentTick = 0;
 let tickWhereLastSphereDropped = null;
 let tickWhereTopLastReached = null;
 
-const BASE_WOOSH = new Audio('woosh-01.wav');
+const BASE_WOOSH = new Audio('./assets/sound/woosh-01.wav');
 const BAG_ITEM_COUNT = 5;
 const SPHERES_CONFIG = [
-    { stage:  1, radius:  14, points:   2, density: 0.3 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-01.wav') },
-    { stage:  2, radius:  20, points:   4, density: 0.25, friction: 0.2, restitution: 0.15, sound: new Audio('woosh-02.wav') },
-    { stage:  3, radius:  30, points:   6, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-03.wav') },
-    { stage:  4, radius:  40, points:  10, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('woosh-04.wav') },
+    { stage:  1, radius:  14, points:   2, density: 0.3 , friction: 0.2, restitution: 0.15, sound: new Audio('./assets/sound/woosh-01.wav') },
+    { stage:  2, radius:  20, points:   4, density: 0.25, friction: 0.2, restitution: 0.15, sound: new Audio('./assets/sound/woosh-02.wav') },
+    { stage:  3, radius:  30, points:   6, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('./assets/sound/woosh-03.wav') },
+    { stage:  4, radius:  40, points:  10, density: 0.2 , friction: 0.2, restitution: 0.15, sound: new Audio('./assets/sound/woosh-04.wav') },
     { stage:  5, radius:  54, points:  16, density: 0.2 , friction: 0.2, restitution: 0.15, sound: BASE_WOOSH },
     { stage:  6, radius:  66, points:  26, density: 0.2 , friction: 0.2, restitution: 0.15, sound: BASE_WOOSH },
     { stage:  7, radius:  80, points:  42, density: 0.2 , friction: 0.2, restitution: 0.15, sound: BASE_WOOSH },
@@ -36,8 +36,8 @@ const SPHERES_CONFIG = [
 // }
 
 // load
-const mergeSound = new Audio('merge-pop.wav');
-const mergeSound2 = new Audio('merge-pop.wav');
+const mergeSound = new Audio('./assets/sound/merge-pop.wav');
+const mergeSound2 = new Audio('./assets/sound/merge-pop.wav');
 
 // font
 // const canvasFont = new FontFace('Sono', 'url(Sono-Variable.ttf)');
@@ -82,16 +82,16 @@ mainCanvas.width = PLAY_AREA_WIDTH;
 mainCanvas.height = PLAY_AREA_HEIGHT + DROP_HEIGHT;
 const ctxSprites = {};
 ctxSprites.bg = new Image();
-    ctxSprites.bg.src = './img/bg.png';
+    ctxSprites.bg.src = './assets/img/bg.png';
 ctxSprites.sphere = Array.from({ length: 11 }, (_, index) => {
     const img = new Image();
-    img.src = `./img/ball${index + 1}.png`;
+    img.src = `./assets/img/ball${index + 1}.png`;
     return img;
 });
 // ctxSprites.powerup = {
 //     collect: new Image()
 // }
-// ctxSprites.powerup.collect.src = `./img/powerup_${'collect'}.png`;
+// ctxSprites.powerup.collect.src = `./assets/img/powerup_${'collect'}.png`;
 
 // create runner, simple gameloop
 const runner = Runner.create({
@@ -108,7 +108,7 @@ const compWorld = Composite.create();
 let randomBag = [];
 let dropScheduled = false;
 let plannedMergesAtDestination = new Map();
-let recentMerges = [];
+let recentMergesInfoArr = [];
 
 let inputX = null;
 let stackX = PLAY_AREA_WIDTH / 2;
@@ -152,6 +152,20 @@ Events.on(engine, 'beforeUpdate', (event) => {
     } else {
         // all spheres are lower
         tickWhereTopLastReached = null;
+    }
+
+    // remove info about finished merges that aren't actually recent anymore
+    
+    // to display effects/score popping up for the recent ones
+    let finishedMerges = 0;
+    for (mergeObject of recentMergesInfoArr)  {
+        const animPercentage = (currentTick - mergeObject.tick) / TICKS_AFTER_MERGE_EFFECT;
+        if (animPercentage < 1) break;
+        finishedMerges++;
+    }
+    if (finishedMerges > 0) {
+        recentMergesInfoArr = recentMergesInfoArr.slice(finishedMerges);
+        //console.log("removed", finishedMerges, "now", recentMerges.length)
     }
 
     currentTick += 1;
@@ -266,177 +280,9 @@ function sceneSetup() {
 
 function endGame() {
     if (!lostGame) {
-        document.getElementById('score-text').style.color = '#55ee33';
+        document.getElementById('score-text').style.color = '#c5cddb';
         lostGame = true;
         dropScheduled = true;
-    }
-}
-
-function renderSceneToCanvas(ctx) {
-
-    ctx.clearRect(0, 0, PLAY_AREA_WIDTH, PLAY_AREA_HEIGHT + DROP_HEIGHT);
-    ctx.font = "bold 48px sans-serif";
-    ctx.textAlign = "center";
-    ctx.lineCap = "round";
-
-    // background
-    ctx.drawImage(ctxSprites.bg, 0, 0);
-
-    // line to indicate where you next drop
-    if (!lostGame && compDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) { 
-        let gradient = ctx.createLinearGradient(0, DROP_HEIGHT, 0, PLAY_AREA_HEIGHT);
-        gradient.addColorStop(0, '#DDE5A700');
-        gradient.addColorStop(1, '#DDE5A725');
-        ctx.fillStyle = gradient;
-        const dropRadius = compDrops.bodies[0].circleRadius ?? 14;
-        ctx.fillRect(stackX -dropRadius, DROP_HEIGHT, dropRadius * 2, PLAY_AREA_HEIGHT);
-    }
-
-    // foreground
-    ctx.fillStyle = "#20082EA0";
-    compDrops.bodies.forEach((body) => { renderSphereShadow(ctx, body); });
-    compWorld.bodies.forEach((body) => { renderSphereShadow(ctx, body); });
-
-    compDrops.bodies.forEach((body, index) => { renderSphereBody(ctx, body, index); });
-    compWorld.bodies.forEach((body) => { renderSphereBody(ctx, body); });
-
-    // remove info about merges that are no longer recent, 
-    // then display effects/score popping up for the recent ones
-    let finishedMerges = 0;
-    for (mergeObject of recentMerges)  {
-        const animPercentage = (currentTick - mergeObject.tick) / TICKS_AFTER_MERGE_EFFECT;
-        if (animPercentage < 1) break;
-        finishedMerges++;
-    }
-    if (finishedMerges > 0) {
-        recentMerges = recentMerges.slice(finishedMerges);
-        //console.log("removed", finishedMerges, "now", recentMerges.length)
-    }
-    recentMerges.forEach((mergeObject) => renderMergeEffect(ctx, mergeObject));
-
-    function renderSphereShadow(ctx, body) {
-        const r = body.circleRadius + 4;
-        let p = { x: body.position.x, y: body.position.y};
-
-        // animate towards merge destination
-        if (body.mergeDestination !== undefined) {
-            const mergeDonePercent = (currentTick - body.tickWhereCollided) / TICKS_UNTIL_MERGE;
-            const mergeCurve = (Math.max(0, mergeDonePercent - 0.5) * 2) ** 4; // wait half the merge wait time, then accelerate towards destination
-            const destPosition = body.mergeDestination.position;
-            const currentMergePosition = lerpVec(p, destPosition, mergeCurve * (1-MERGE_LERP_BIAS));
-            p = currentMergePosition;
-        }
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r, 0, 2 * Math.PI);
-        ctx.fill();
-    }
-
-    function renderSphereBody(ctx, body) {
-        const r = body.circleRadius;
-        let p = { x: body.position.x, y: body.position.y };
-
-        // animate towards merge destination
-        if (body.mergeDestination !== undefined) {
-            const mergeDonePercent = (currentTick - body.tickWhereCollided) / TICKS_UNTIL_MERGE;
-            const mergeCurve = (Math.max(0, mergeDonePercent - 0.5) * 2) ** 4; // wait half the merge wait time, then accelerate towards destination
-            const destPosition = body.mergeDestination.position;
-            const currentMergePosition = lerpVec(p, destPosition, mergeCurve * (1-MERGE_LERP_BIAS));
-            p = currentMergePosition;
-        }
-
-        ctx.save();
-        ctx.translate(p.x, p.y);
-
-        const visualRotationAdd = (p.x / body.circleRadius) * Math.PI * 0.5;
-        ctx.rotate(body.angle + visualRotationAdd);
-        const sprite = ctxSprites.sphere[body.stage - 1];
-        const spriteScale = 0.5;
-        ctx.drawImage(sprite, - sprite.width * spriteScale * 0.5, - sprite.height * spriteScale * 0.5, sprite.width * spriteScale, sprite.height * spriteScale);
-        // ctx.fillStyle = 'black';
-        // ctx.fillText(body.dropID ?? '', 0, 0)
-        if (body.tickWhereCollided !== undefined) {
-            const mergeAnimPercentage = (currentTick - body.tickWhereCollided) / TICKS_UNTIL_MERGE;
-            ctx.fillStyle = (Math.sin((mergeAnimPercentage*4) ** 2) > 0) ? '#ffffff' : '#ffffff20';
-            ctx.beginPath();
-            ctx.arc(0, 0, r, 0, 2 * Math.PI);
-            ctx.fill();
-        }
-        ctx.restore();
-
-        ctx.lineWidth = r*0.4;
-        ctx.strokeStyle = '#ffffff50'
-        ctx.globalCompositeOperation = 'soft-light'
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r*0.8, Math.PI*1.1, Math.PI*1.6);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, r*0.8, Math.PI*1.3, Math.PI*1.4);
-        ctx.stroke();
-        ctx.lineWidth = 4;
-        ctx.globalCompositeOperation = 'source-over'
-    }
-
-    function renderMergeEffect(ctx, mergeObject) {
-        const animPercentage = (currentTick - mergeObject.tick) / TICKS_AFTER_MERGE_EFFECT;
-        if (animPercentage > 1) return;
-
-        ctx.save();
-        const p = {
-            x: mergeObject.position.x ?? PLAY_AREA_WIDTH  * 0.5, 
-            y: mergeObject.position.y ?? PLAY_AREA_HEIGHT * 0.2
-        }
-        ctx.translate(p.x, p.y);
-        ctx.globalAlpha = 1.0 - animPercentage;
-        ctx.fillStyle = (mergeObject.addedScore > 20) ? '#ffff77' : '#77ff99';
-        ctx.strokeStyle = 'black';
-        ctx.strokeText("+" + mergeObject.addedScore, 0, - animPercentage * 200);
-        ctx.fillText("+" + mergeObject.addedScore, 0, - animPercentage * 200);
-       
-        const easedPercentage = easeOutExpo(animPercentage);
-        ctx.strokeStyle = 'white';
-        ctx.globalAlpha = 1.0 - easedPercentage;
-        ctx.beginPath();
-        ctx.arc(0, 0, mergeObject.circleRadius * (1.0 + easedPercentage * 0.5), 0, Math.PI*2);
-        ctx.stroke();
-        if (mergeObject.wasTripleMerge) {
-            ctx.beginPath();
-            ctx.arc(0, 0, mergeObject.circleRadius * (1.0 + easedPercentage * 1), 0, Math.PI*2);
-            ctx.stroke();
-        }
-
-        ctx.globalAlpha = 1.0;
-        ctx.restore();
-        
-    }
-
-    // function ctxCircle(context, centerX, centerY, radius, fillColor) {
-    //     // Draw the circle
-    //     context.beginPath();
-    //     context.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-    //     context.fillStyle = fillColor;
-    //     context.fill();
-    //     context.closePath();
-    // }
-
-    // in front of everything
-    let gradient = ctx.createLinearGradient(0, 2, 0, DROP_HEIGHT-DROP_BARRIER);
-    gradient.addColorStop(0, '#20082E');
-    gradient.addColorStop(1, '#20082E00');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_HEIGHT-DROP_BARRIER);
-
-    if (!lostGame && compDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) {
-        ctx.fillStyle = '#20082E90';
-        ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
-
-        if (tickWhereTopLastReached !== null) {
-            const intensity = (currentTick - tickWhereTopLastReached) / TICKS_UNTIL_LOST;
-            const blinkRed = Math.sin(currentTick / 4);
-            ctx.fillStyle = `rgba(255, 0, 0, ${blinkRed * intensity})`;;
-            ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
-        }
-        
     }
 }
 
@@ -590,7 +436,7 @@ function finalizeOldPlannedMerges() {
             } 
 
             plannedMergesAtDestination.delete(mergeTarget);
-            recentMerges.push(
+            recentMergesInfoArr.push(
                 {tick: currentTick, 
                     addedScore, 
                     position: addedSphere.position,
