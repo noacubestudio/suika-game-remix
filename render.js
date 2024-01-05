@@ -132,20 +132,26 @@ function renderSphereBody(ctx, body) {
     // non-rotated shading
 
     const gradient = ctx.createRadialGradient(p.x - 0.35*r, p.y - 0.35*r, r*0.4, p.x, p.y, r);
-    gradient.addColorStop(0, "#ffffff20");
+    gradient.addColorStop(0, "#3D083B00");
     gradient.addColorStop(1, "#3D083B20");
     ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.arc(p.x, p.y, r, 0, Math.PI*2);
     ctx.fill();
 
-    const gradient2 = ctx.createRadialGradient(p.x - 0.1*r, p.y - 0.1*r, r*0.5, p.x, p.y, r);
-    gradient2.addColorStop(0, "#f78d8d00");
-    gradient2.addColorStop(1, "#f78d8d10");
-    ctx.fillStyle = gradient2;
+    const deltaXToStack = Math.min(Math.max(-PLAY_AREA_WIDTH, stackX-p.x), PLAY_AREA_WIDTH);
+    const reflectXRange = -(deltaXToStack / PLAY_AREA_WIDTH) * 0.18;
+
+    ctx.globalCompositeOperation = 'overlay'
+    ctx.fillStyle = '#ffffff30';
     ctx.beginPath();
-    ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+    ctx.arc(p.x - reflectXRange*r, p.y - 0.16*r, r*0.7, 0, 2 * Math.PI);
     ctx.fill();
+    ctx.fillStyle = '#ffffff30';
+    ctx.beginPath();
+    ctx.arc(p.x - reflectXRange*r/2, p.y - 0.08*r, r*0.85, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over'
 }
 
 
