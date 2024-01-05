@@ -6,14 +6,30 @@ function renderSceneToCanvas(ctx) {
     ctx.textAlign = "center";
     ctx.lineCap = "round";
 
+    const distanceFromLosingPercent = (tickWhereTopLastReached !== null)
+        ? 1 - ((currentTick - tickWhereTopLastReached) / TICKS_UNTIL_LOST)
+        : 1;
+    const visualDistanceFromLosingPercent = (distanceFromLosingPercent < 0.7)
+        ? distanceFromLosingPercent
+        : 1;
+
     // background
     ctx.drawImage(ctxSprites.bg, 0, 0);
+    if (lostGame) {
+        ctx.globalAlpha = 0;
+    } else if (visualDistanceFromLosingPercent < 1) {
+        ctx.globalAlpha = visualDistanceFromLosingPercent;
+    }
+    ctx.drawImage(ctxSprites.bgUpper, 0, 0);
+    ctx.globalAlpha = 1;
+
+    // 
 
     // line to indicate where you next drop
     if (!lostGame && compDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) { 
         let gradient = ctx.createLinearGradient(0, DROP_HEIGHT, 0, PLAY_AREA_HEIGHT);
-        gradient.addColorStop(0, '#f78d8d10');
-        gradient.addColorStop(1, '#f78d8d20');
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.05');//'#f78d8d10');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0.1');//'#f78d8d20');
         ctx.fillStyle = gradient;
         const dropRadius = compDrops.bodies[0].circleRadius ?? 14;
         ctx.fillRect(stackX -dropRadius, DROP_HEIGHT, dropRadius * 2, PLAY_AREA_HEIGHT);
@@ -21,8 +37,8 @@ function renderSceneToCanvas(ctx) {
 
     // indicate dropping platform and rising losing gradient
     if (!lostGame) {
-        if (tickWhereTopLastReached !== null) {
-            const intensity = (currentTick - tickWhereTopLastReached) / TICKS_UNTIL_LOST;
+        if (visualDistanceFromLosingPercent < 1) {
+            const intensity = 1 - visualDistanceFromLosingPercent;
             const blinkRed = Math.sin(currentTick / 4)/2 + 0.5;
             ctx.fillStyle = `rgba(255, 255, 255, ${blinkRed * intensity})`;;
             // ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
@@ -33,7 +49,7 @@ function renderSceneToCanvas(ctx) {
         // ctx.fillRect(0, DROP_HEIGHT-4, PLAY_AREA_WIDTH, 4);
 
         if (compDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) {
-            ctx.fillStyle = '#f78d8d';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2' //'#f78d8d';
             const dropRadius = compDrops.bodies[0].circleRadius ?? PLAY_AREA_WIDTH;
             const dropPos = compDrops.bodies[0].position.x - dropRadius ?? 0;
             ctx.fillRect(dropPos, DROP_HEIGHT-DROP_BARRIER, dropRadius*2, 10);

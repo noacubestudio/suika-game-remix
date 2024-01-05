@@ -45,7 +45,7 @@ body {
     transform: translateX(-50%);
     text-align: center;
     font-size: 5vh;
-    color: #f78d8d;
+    color: #c5cddb;
     font-weight: 500;
     user-select: none;
    -webkit-user-select: none;
@@ -58,7 +58,7 @@ body {
     transform: translateX(-50%);
     text-align: center;
     font-size: 2vh;
-    color: #f94e6d;
+    color: #8B97B6;
     font-weight: 500;
     user-select: none;
    -webkit-user-select: none;
@@ -69,7 +69,7 @@ body {
     top: 15px;
     left: 20px;
     font-size: 2.5vh;
-    color: #f94e6d;
+    color: #f78d8d;
     font-weight: 500;
     user-select: none;
    -webkit-user-select: none;
@@ -77,11 +77,11 @@ body {
 
 #seed {
     position: absolute;
-    bottom: 1vh;
+    bottom: 0.9vh;
     right: 20px;
     font-size: 1.6vh;
     font-weight: 500;
-    color: #c12458;
+    color: #8B97B6;
     text-align: right;
     user-select: none;
    -webkit-user-select: none;

@@ -83,6 +83,8 @@ mainCanvas.height = PLAY_AREA_HEIGHT + DROP_HEIGHT;
 const ctxSprites = {};
 ctxSprites.bg = new Image();
     ctxSprites.bg.src = './assets/img/bg.png';
+ctxSprites.bgUpper = new Image();
+    ctxSprites.bgUpper.src = './assets/img/bg_upper.png';
 ctxSprites.sphere = Array.from({ length: 11 }, (_, index) => {
     const img = new Image();
     img.src = `./assets/img/ball${index + 1}.png`;
@@ -171,7 +173,9 @@ Events.on(engine, 'beforeUpdate', (event) => {
     currentTick += 1;
 });
 
-Events.on(engine, 'afterUpdate', (event) => { renderSceneToCanvas(mainCtx) });
+Events.on(engine, 'afterUpdate', (event) => { 
+    renderSceneToCanvas(mainCtx) 
+});
 
 Events.on(engine, 'collisionStart', (event) => {
     event.pairs.forEach((pair) => {
@@ -280,7 +284,7 @@ function sceneSetup() {
 
 function endGame() {
     if (!lostGame) {
-        document.getElementById('score-text').style.color = '#c5cddb';
+        document.getElementById('score-text').style.color = '#f78d8d';
         lostGame = true;
         dropScheduled = true;
     }
