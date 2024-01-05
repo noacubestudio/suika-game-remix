@@ -1,17 +1,19 @@
 // config
-const DROP_HEIGHT = 150;
-const DROP_BARRIER = 10;
-const PLAY_AREA_HEIGHT = 600; // make sure to also update the css
-const PLAY_AREA_WIDTH = 500;
+const DANGER_AREA_HEIGHT = 150;
+const DROP_FLOOR_HEIGHT  = DANGER_AREA_HEIGHT - 15; // drop from a bit further up
+
+const PLAY_AREA_HEIGHT = 600; // if changing these, make sure to also update the css
+const PLAY_AREA_WIDTH  = 500; // if changing these, make sure to also update the css
 
 const GRAVITY_MULT = 1.2;
-const MERGE_LERP_BIAS = 0.3 // 0 means the older/lower sphere, 1 means the newer/higher sphere
 
+const MERGE_LERP_BIAS = 0.3 // range 0-1, low = merge towards older sphere
 
 const TICKS_UNTIL_SPHERES_FOLLOW = 10;
-const TICKS_UNTIL_LOST = 150;
-const TICKS_UNTIL_MERGE = 20;
-const TICKS_AFTER_MERGE_EFFECT = 40;
+const TICKS_UNTIL_LOST           = 150;
+const TICKS_UNTIL_MERGE          = 20;
+const TICKS_AFTER_MERGE_EFFECT   = 40;
+
 let currentTick = 0;
 let tickWhereLastSphereDropped = null;
 let tickWhereTopLastReached = null;
@@ -79,7 +81,7 @@ document.getElementById('seed').textContent = "Seed: " + Common._seed;
 const mainCanvas = document.getElementById('canvas-container');
 const mainCtx = mainCanvas.getContext('2d');
 mainCanvas.width = PLAY_AREA_WIDTH;
-mainCanvas.height = PLAY_AREA_HEIGHT + DROP_HEIGHT;
+mainCanvas.height = PLAY_AREA_HEIGHT + DANGER_AREA_HEIGHT;
 const ctxSprites = {};
 ctxSprites.bg = new Image();
     ctxSprites.bg.src = './assets/img/bg.png';
@@ -144,7 +146,7 @@ Events.on(engine, 'beforeUpdate', (event) => {
     // check bounds
     const droppedSpheresTopY = (compWorld.bodies.length > 0) ? Composite.bounds(compWorld).min.y : Infinity;
     
-    if (droppedSpheresTopY <= DROP_HEIGHT) {
+    if (droppedSpheresTopY <= DANGER_AREA_HEIGHT) {
         if (tickWhereTopLastReached === null) {
             // initial reach
             tickWhereTopLastReached = currentTick;
@@ -248,7 +250,7 @@ function endedTouch(event) {
 function sceneSetup() {
     // background
     Composite.add(world, Bodies.rectangle(
-        PLAY_AREA_WIDTH/2, (DROP_HEIGHT+PLAY_AREA_HEIGHT)/2, PLAY_AREA_WIDTH, DROP_HEIGHT+PLAY_AREA_HEIGHT, {
+        PLAY_AREA_WIDTH/2, (DANGER_AREA_HEIGHT+PLAY_AREA_HEIGHT)/2, PLAY_AREA_WIDTH, DANGER_AREA_HEIGHT+PLAY_AREA_HEIGHT, {
             render: { sprite: { texture: './img/bg.png' } },
             isStatic: true,
             collisionFilter: { mask: 2 }
@@ -258,7 +260,7 @@ function sceneSetup() {
     // floor and walls
     const wallStyle = { fillStyle: '#F9F' };
     const wallWidth = 100;
-    const totalHeight = PLAY_AREA_HEIGHT + DROP_HEIGHT;
+    const totalHeight = PLAY_AREA_HEIGHT + DANGER_AREA_HEIGHT;
     Composite.add(world, [
         Bodies.rectangle(PLAY_AREA_WIDTH/2, totalHeight + wallWidth/2, PLAY_AREA_WIDTH, wallWidth, { isStatic: true, render: wallStyle }),
         Bodies.rectangle(PLAY_AREA_WIDTH + wallWidth/2, totalHeight/2, wallWidth, totalHeight, { isStatic: true, render: wallStyle }),
@@ -266,7 +268,7 @@ function sceneSetup() {
     ]);
 
     // sensor - anything that collided before cant touch this
-    Composite.add(world, Bodies.rectangle(PLAY_AREA_WIDTH/2, (DROP_HEIGHT-DROP_BARRIER)/2, PLAY_AREA_WIDTH+60, DROP_HEIGHT, {
+    Composite.add(world, Bodies.rectangle(PLAY_AREA_WIDTH/2, DROP_FLOOR_HEIGHT/2, PLAY_AREA_WIDTH+60, DANGER_AREA_HEIGHT, {
         isStatic: true,
         isSensor: true,
         render: { fillStyle: 'transparent' }//, strokeStyle: '#20082E', lineWidth: DROP_BARRIER }
@@ -471,23 +473,21 @@ function finalizeOldPlannedMerges() {
 }
 
 function updateStackState() {
-    const drop_until = DROP_HEIGHT - DROP_BARRIER;
-
     // rest follow if lowest one has been dropped, with a bit of a delay
     if (tickWhereLastSphereDropped !== null) { 
         if (currentTick - tickWhereLastSphereDropped >= TICKS_UNTIL_SPHERES_FOLLOW) {
             const stackLowerEdge = compDrops.bodies[0].bounds.max.y;
-            if (stackLowerEdge < drop_until) {
+            if (stackLowerEdge < DROP_FLOOR_HEIGHT) {
                 Composite.translate(compDrops, {x: 0, y: 5});
             } else {
-                if (stackLowerEdge !== drop_until) Composite.translate(compDrops, {x: 0, y: drop_until - stackLowerEdge});
+                if (stackLowerEdge !== DROP_FLOOR_HEIGHT) Composite.translate(compDrops, {x: 0, y: DROP_FLOOR_HEIGHT - stackLowerEdge});
                 tickWhereLastSphereDropped = null;
             }
         }
     }
 
     // drop lowest
-    if (dropScheduled && compDrops.bodies[0].bounds.max.y >= drop_until - 0.5) {
+    if (dropScheduled && compDrops.bodies[0].bounds.max.y >= DROP_FLOOR_HEIGHT - 0.5) {
         dropSphereFromStack();
         if (compDrops.bodies.length > 0) tickWhereLastSphereDropped = currentTick;
     }
@@ -552,7 +552,7 @@ function meanAngleFromTwo(radA, radB) {
 function pushSphereFromBag(dest, pickedProperties) {
     if (dest.bodies.length >= 5) return;
 
-    let prevTop = DROP_HEIGHT - DROP_BARRIER;
+    let prevTop = DROP_FLOOR_HEIGHT;
     if (dest.bodies.length > 0) {
         prevTop = dest.bodies[dest.bodies.length-1].position.y;
         prevTop -= dest.bodies[dest.bodies.length-1].circleRadius;

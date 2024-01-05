@@ -1,7 +1,7 @@
 function renderSceneToCanvas(ctx) {
 
     ctx.fillStyle = '#444444';
-    ctx.fillRect(0, 0, PLAY_AREA_WIDTH, PLAY_AREA_HEIGHT + DROP_HEIGHT);
+    ctx.fillRect(0, 0, PLAY_AREA_WIDTH, PLAY_AREA_HEIGHT + DANGER_AREA_HEIGHT);
     ctx.font = "bold 48px sans-serif";
     ctx.textAlign = "center";
     ctx.lineCap = "round";
@@ -23,39 +23,36 @@ function renderSceneToCanvas(ctx) {
     ctx.drawImage(ctxSprites.bgUpper, 0, 0);
     ctx.globalAlpha = 1;
 
-    // 
-
-    // line to indicate where you next drop
-    if (!lostGame && compDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) { 
-        let gradient = ctx.createLinearGradient(0, DROP_HEIGHT, 0, PLAY_AREA_HEIGHT);
-        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.05');//'#f78d8d10');
-        gradient.addColorStop(1, 'rgba(255, 255, 255, 0.1');//'#f78d8d20');
-        ctx.fillStyle = gradient;
-        const dropRadius = compDrops.bodies[0].circleRadius ?? 14;
-        ctx.fillRect(stackX -dropRadius, DROP_HEIGHT, dropRadius * 2, PLAY_AREA_HEIGHT);
-    }
-
-    // indicate dropping platform and rising losing gradient
     if (!lostGame) {
+
+        // line to indicate where you next drop
+        const nextDropAboveRestingHeightDelta = DROP_FLOOR_HEIGHT - compDrops.bodies[0].bounds.max.y;
+        if (nextDropAboveRestingHeightDelta < 20) { 
+            const indicatorRadius = (compDrops.bodies[0].circleRadius ?? 14) * (1-(nextDropAboveRestingHeightDelta / 20));
+
+            let indicatorGradient = ctx.createLinearGradient(0, DANGER_AREA_HEIGHT, 0, PLAY_AREA_HEIGHT);
+            indicatorGradient.addColorStop(0, 'rgba(255, 255, 255, 0.05');//'#f78d8d10');
+            indicatorGradient.addColorStop(1, 'rgba(255, 255, 255, 0.1');//'#f78d8d20');
+            ctx.fillStyle = indicatorGradient;
+            ctx.fillRect(stackX -indicatorRadius, DANGER_AREA_HEIGHT, indicatorRadius * 2, PLAY_AREA_HEIGHT);
+        }
+
+        // rising blinking bg in danger area while losing
         if (visualDistanceFromLosingPercent < 1) {
             const intensity = 1 - visualDistanceFromLosingPercent;
             const blinkRed = Math.sin(currentTick / 4)/2 + 0.5;
-            ctx.fillStyle = `rgba(255, 255, 255, ${blinkRed * intensity})`;;
+            ctx.fillStyle = `rgba(255, 255, 255, ${blinkRed * intensity})`;
             // ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
-            ctx.fillRect(0, DROP_HEIGHT*(1-intensity), PLAY_AREA_WIDTH, DROP_HEIGHT*(intensity));
+            ctx.fillRect(0, DANGER_AREA_HEIGHT*(1-intensity), PLAY_AREA_WIDTH, DANGER_AREA_HEIGHT*(intensity));
         }
         
-        // ctx.fillStyle = `rgba(255, 255, 255, ${0.1})`;;
-        // ctx.fillRect(0, DROP_HEIGHT-4, PLAY_AREA_WIDTH, 4);
-
-        if (compDrops.bodies[0].bounds.max.y >= DROP_HEIGHT-DROP_BARRIER - 0.5) {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.2' //'#f78d8d';
-            const dropRadius = compDrops.bodies[0].circleRadius ?? PLAY_AREA_WIDTH;
-            const dropPos = compDrops.bodies[0].position.x - dropRadius ?? 0;
-            ctx.fillRect(dropPos, DROP_HEIGHT-DROP_BARRIER, dropRadius*2, 10);
-            ctx.fillStyle = 'black';
-            ctx.fillRect(dropPos-10, DROP_HEIGHT-DROP_BARRIER, dropRadius*2+20, 4);
-        }
+        // dropping platform
+        const dropRadius = compDrops.bodies[0].circleRadius ?? PLAY_AREA_WIDTH;
+        const dropPos = stackX - dropRadius ?? 0;
+        const platformOpacity = 1 - Math.min(1, nextDropAboveRestingHeightDelta / 20) * 0.8;
+        ctx.fillStyle = `rgba(0, 0, 0, ${platformOpacity})`;
+        ctx.fillRect(dropPos-10, DROP_FLOOR_HEIGHT, dropRadius*2+20, 4);
+        
     }
 
     // foreground
@@ -70,17 +67,18 @@ function renderSceneToCanvas(ctx) {
     recentMergesInfoArr.forEach((mergeObject) => renderMergeEffect(ctx, mergeObject));
 
     // in front of everything
-    let gradient = ctx.createLinearGradient(0, 2, 0, DROP_HEIGHT-DROP_BARRIER);
+    let gradient = ctx.createLinearGradient(0, 2, 0, DROP_FLOOR_HEIGHT);
     gradient.addColorStop(0, '#180d2fE0');
     gradient.addColorStop(1, '#180d2f00');
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_HEIGHT-DROP_BARRIER);
+    ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_FLOOR_HEIGHT);
 }
 
 
 function renderSphereShadow(ctx, body) {
     const r = body.circleRadius + 4;
     let p = { x: body.position.x, y: body.position.y};
+    //p.x = Math.min(Math.max(body.circleRadius, p.x), PLAY_AREA_WIDTH-body.circleRadius);
 
     // animate towards merge destination
     if (body.mergeDestination !== undefined) {
@@ -100,6 +98,7 @@ function renderSphereShadow(ctx, body) {
 function renderSphereBody(ctx, body) {
     const r = body.circleRadius;
     let p = { x: body.position.x, y: body.position.y };
+    //p.x = Math.min(Math.max(body.circleRadius, p.x), PLAY_AREA_WIDTH-body.circleRadius);
 
     // animate towards merge destination
     if (body.mergeDestination !== undefined) {
@@ -141,13 +140,14 @@ function renderSphereBody(ctx, body) {
 
     const deltaXToStack = Math.min(Math.max(-PLAY_AREA_WIDTH, stackX-p.x), PLAY_AREA_WIDTH);
     const reflectXRange = -(deltaXToStack / PLAY_AREA_WIDTH) * 0.18;
+    const reflectOpacity = 0.2 * Math.min(1, p.y / DANGER_AREA_HEIGHT);
 
     ctx.globalCompositeOperation = 'overlay'
-    ctx.fillStyle = '#ffffff30';
+    ctx.fillStyle = `rgba(255, 255, 255, ${reflectOpacity})`;
     ctx.beginPath();
     ctx.arc(p.x - reflectXRange*r, p.y - 0.16*r, r*0.7, 0, 2 * Math.PI);
     ctx.fill();
-    ctx.fillStyle = '#ffffff30';
+    ctx.fillStyle = `rgba(255, 255, 255, ${reflectOpacity})`;
     ctx.beginPath();
     ctx.arc(p.x - reflectXRange*r/2, p.y - 0.08*r, r*0.85, 0, 2 * Math.PI);
     ctx.fill();
