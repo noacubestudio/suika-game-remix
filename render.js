@@ -27,21 +27,16 @@ function renderSceneToCanvas(ctx) {
 
         // line to indicate where you next drop
         const nextDropAboveRestingHeightDelta = DROP_FLOOR_HEIGHT - compDrops.bodies[0].bounds.max.y;
-        if (nextDropAboveRestingHeightDelta < 20) { 
-            const indicatorRadius = (compDrops.bodies[0].circleRadius ?? 14) * (1-(nextDropAboveRestingHeightDelta / 20));
-
-            let indicatorGradient = ctx.createLinearGradient(0, DANGER_AREA_HEIGHT, 0, PLAY_AREA_HEIGHT);
-            indicatorGradient.addColorStop(0, 'rgba(255, 255, 255, 0.05');//'#f78d8d10');
-            indicatorGradient.addColorStop(1, 'rgba(255, 255, 255, 0.1');//'#f78d8d20');
-            ctx.fillStyle = indicatorGradient;
-            ctx.fillRect(stackX -indicatorRadius, DANGER_AREA_HEIGHT, indicatorRadius * 2, PLAY_AREA_HEIGHT);
-        }
+        // ghost piece to indicate next drop
+        if (nextDropAboveRestingHeightDelta < 1) {
+            renderGhostPiece(ctx, compDrops.bodies[0].circleRadius ?? 14, stackX, compWorld.bodies);
+        } 
 
         // rising blinking bg in danger area while losing
         if (visualDistanceFromLosingPercent < 1) {
             const intensity = 1 - visualDistanceFromLosingPercent;
-            const blinkRed = Math.sin(currentTick / 4)/2 + 0.5;
-            ctx.fillStyle = `rgba(255, 255, 255, ${blinkRed * intensity})`;
+            const blinkMultiplier = Math.sin(currentTick / 4)/2 + 0.5;
+            ctx.fillStyle = `rgba(255, 255, 255, ${blinkMultiplier * intensity})`;
             // ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
             ctx.fillRect(0, DANGER_AREA_HEIGHT*(1-intensity), PLAY_AREA_WIDTH, DANGER_AREA_HEIGHT*(intensity));
         }
@@ -72,6 +67,46 @@ function renderSceneToCanvas(ctx) {
     gradient.addColorStop(1, '#180d2f00');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, -2, PLAY_AREA_WIDTH, DROP_FLOOR_HEIGHT);
+}
+
+function renderGhostPiece(ctx, radius, dropX, checkBodiesArr) {
+
+    let canTravelY = DANGER_AREA_HEIGHT + PLAY_AREA_HEIGHT - radius;
+
+    let colBody = null;
+    checkBodiesArr.forEach((body) => {
+        const xDist = Math.abs(dropX - body.position.x);
+        const targetDist = radius + body.circleRadius;
+        if (xDist < targetDist) { // could collide
+            const collisionPositionY = body.position.y - Math.sqrt(targetDist**2 - xDist**2);
+            if (collisionPositionY < canTravelY) {
+                canTravelY = collisionPositionY;
+            }
+            colBody = body;
+        }
+    });
+
+    if (colBody && colBody.velocity.y > 3) {
+        //console.log(colBody.velocity.y)
+        return;
+    }
+    const visibility = Math.min(1, 6 * (canTravelY-DANGER_AREA_HEIGHT) / PLAY_AREA_HEIGHT);
+
+    // ctx.fillStyle = 'rgba(255, 255, 255, 0.5';
+    let indicatorGradient = ctx.createLinearGradient(0, DANGER_AREA_HEIGHT, 0, canTravelY);
+    indicatorGradient.addColorStop(0, `rgba(255, 255, 255, ${0.03 * visibility})`);
+    indicatorGradient.addColorStop(1, `rgba(255, 255, 255, ${0.06 * visibility})`);
+    ctx.fillStyle = indicatorGradient;
+
+    ctx.beginPath();
+    ctx.arc(dropX, canTravelY, radius, 0, Math.PI);
+    ctx.fill();
+    ctx.fillRect(dropX-radius, DANGER_AREA_HEIGHT, radius*2, canTravelY-DANGER_AREA_HEIGHT);
+
+    ctx.strokeStyle = indicatorGradient;
+    ctx.beginPath();
+    ctx.arc(dropX, canTravelY, radius, 0, Math.PI*2);
+    ctx.stroke();
 }
 
 
