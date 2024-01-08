@@ -1,7 +1,7 @@
 function renderSceneToCanvas(ctx) {
 
     ctx.fillStyle = '#444444';
-    ctx.fillRect(0, 0, PLAY_AREA_WIDTH, PLAY_AREA_HEIGHT + DANGER_AREA_HEIGHT);
+    ctx.fillRect(0, 0, PLAY_AREA_WIDTH, PLAY_AREA_HEIGHT + ABOVE_PLAY_AREA_HEIGHT);
     ctx.font = "bold 48px sans-serif";
     ctx.textAlign = "center";
     ctx.lineCap = "round";
@@ -26,9 +26,11 @@ function renderSceneToCanvas(ctx) {
     if (!lostGame) {
 
         // line to indicate where you next drop
-        const nextDropAboveRestingHeightDelta = DROP_FLOOR_HEIGHT - compDrops.bodies[0].bounds.max.y;
+        
         // ghost piece to indicate next drop
-        if (nextDropAboveRestingHeightDelta < 1) {
+        // wait before showing this after a drop
+        // it needs to be calculated, but also wont be shown, on top of a falling sphere.
+        if (!tickWhereLastSphereDropped || currentTick - tickWhereLastSphereDropped > 20) {
             renderGhostPiece(ctx, compDrops.bodies[0].circleRadius ?? 14, stackX, compWorld.bodies);
         } 
 
@@ -38,12 +40,13 @@ function renderSceneToCanvas(ctx) {
             const blinkMultiplier = Math.sin(currentTick / 4)/2 + 0.5;
             ctx.fillStyle = `rgba(255, 255, 255, ${blinkMultiplier * intensity})`;
             // ctx.fillRect(0, DROP_HEIGHT-DROP_BARRIER, PLAY_AREA_WIDTH, DROP_BARRIER);
-            ctx.fillRect(0, DANGER_AREA_HEIGHT*(1-intensity), PLAY_AREA_WIDTH, DANGER_AREA_HEIGHT*(intensity));
+            ctx.fillRect(0, ABOVE_PLAY_AREA_HEIGHT*(1-intensity), PLAY_AREA_WIDTH, ABOVE_PLAY_AREA_HEIGHT*(intensity));
         }
         
         // dropping platform
         const dropRadius = compDrops.bodies[0].circleRadius ?? PLAY_AREA_WIDTH;
         const dropPos = stackX - dropRadius ?? 0;
+        const nextDropAboveRestingHeightDelta = DROP_FLOOR_HEIGHT - compDrops.bodies[0].bounds.max.y;
         const platformOpacity = 1 - Math.min(1, nextDropAboveRestingHeightDelta / 20) * 0.8;
         ctx.fillStyle = `rgba(0, 0, 0, ${platformOpacity})`;
         ctx.fillRect(dropPos-10, DROP_FLOOR_HEIGHT, dropRadius*2+20, 4);
@@ -51,6 +54,7 @@ function renderSceneToCanvas(ctx) {
     }
 
     // foreground
+    // circles
     ctx.fillStyle = 'black';//"#20082EA0";
     compDrops.bodies.forEach((body) => { renderSphereShadow(ctx, body); });
     compWorld.bodies.forEach((body) => { renderSphereShadow(ctx, body); });
@@ -58,6 +62,14 @@ function renderSceneToCanvas(ctx) {
     compDrops.bodies.forEach((body, index) => { renderSphereBody(ctx, body, index); });
     compWorld.bodies.forEach((body) => { renderSphereBody(ctx, body); });
 
+    // //glass
+    // ctx.lineWidth = 4;
+    // ctx.strokeStyle = `rgba(0, 0, 0, ${0.6})`;
+    // ctx.beginPath();
+    // ctx.roundRect(12, DANGER_AREA_HEIGHT+12, PLAY_AREA_WIDTH-24, PLAY_AREA_HEIGHT-24, 2);
+    // ctx.stroke();
+
+    // particles
     ctx.lineWidth = 4;
     recentMergesInfoArr.forEach((mergeObject) => renderMergeEffect(ctx, mergeObject));
 
@@ -71,41 +83,50 @@ function renderSceneToCanvas(ctx) {
 
 function renderGhostPiece(ctx, radius, dropX, checkBodiesArr) {
 
-    let canTravelY = DANGER_AREA_HEIGHT + PLAY_AREA_HEIGHT - radius;
-
-    let colBody = null;
+    let closestCollisionY = ABOVE_PLAY_AREA_HEIGHT + PLAY_AREA_HEIGHT - radius;
+    let closestCollisionBody = null;
+    
     checkBodiesArr.forEach((body) => {
-        const xDist = Math.abs(dropX - body.position.x);
-        const targetDist = radius + body.circleRadius;
-        if (xDist < targetDist) { // could collide
-            const collisionPositionY = body.position.y - Math.sqrt(targetDist**2 - xDist**2);
-            if (collisionPositionY < canTravelY) {
-                canTravelY = collisionPositionY;
+        const xDistance = Math.abs(dropX - body.position.x);
+        const targetDistance = radius + body.circleRadius;
+
+        // Check for potential collision
+        if (xDistance < targetDistance) {
+            const collisionY = body.position.y - Math.sqrt(targetDistance**2 - xDistance**2);
+
+            // Update closest collision position if higher on the screen than the last
+            if (collisionY < closestCollisionY) {
+                closestCollisionY = collisionY;
+                closestCollisionBody = body;
             }
-            colBody = body;
         }
     });
 
-    if (colBody && colBody.velocity.y > 3) {
-        //console.log(colBody.velocity.y)
-        return;
+    // Check if the colliding body has a significant downward velocity
+    if (closestCollisionBody && closestCollisionBody.velocity.y > 3) {
+        return; // don't render the ghost piece above the falling body
     }
-    const visibility = Math.min(1, 6 * (canTravelY-DANGER_AREA_HEIGHT) / PLAY_AREA_HEIGHT);
 
-    // ctx.fillStyle = 'rgba(255, 255, 255, 0.5';
-    let indicatorGradient = ctx.createLinearGradient(0, DANGER_AREA_HEIGHT, 0, canTravelY);
-    indicatorGradient.addColorStop(0, `rgba(255, 255, 255, ${0.03 * visibility})`);
-    indicatorGradient.addColorStop(1, `rgba(255, 255, 255, ${0.06 * visibility})`);
-    ctx.fillStyle = indicatorGradient;
+    // if close to the top, fade out the preview since it is more distracting and not really needed then
+    const visibility = Math.min(1, 6 * (closestCollisionY-ABOVE_PLAY_AREA_HEIGHT) / PLAY_AREA_HEIGHT);
 
+    // linear gradient, more visible near the bottom
+    const fadeInDownGradient = ctx.createLinearGradient(0, ABOVE_PLAY_AREA_HEIGHT, 0, closestCollisionY);
+    fadeInDownGradient.addColorStop(0, `rgba(255, 255, 255, ${0.03 * visibility})`);
+    fadeInDownGradient.addColorStop(1, `rgba(255, 255, 255, ${0.06 * visibility})`);
+
+    ctx.fillStyle = fadeInDownGradient;
+    ctx.strokeStyle = fadeInDownGradient;
+
+    // semi circle and rectangle above
     ctx.beginPath();
-    ctx.arc(dropX, canTravelY, radius, 0, Math.PI);
+    ctx.arc(dropX, closestCollisionY, radius, 0, Math.PI);
     ctx.fill();
-    ctx.fillRect(dropX-radius, DANGER_AREA_HEIGHT, radius*2, canTravelY-DANGER_AREA_HEIGHT);
+    ctx.fillRect(dropX-radius, ABOVE_PLAY_AREA_HEIGHT, radius*2, closestCollisionY-ABOVE_PLAY_AREA_HEIGHT);
 
-    ctx.strokeStyle = indicatorGradient;
+    // circle outline
     ctx.beginPath();
-    ctx.arc(dropX, canTravelY, radius, 0, Math.PI*2);
+    ctx.arc(dropX, closestCollisionY, radius, 0, Math.PI*2);
     ctx.stroke();
 }
 
@@ -175,7 +196,7 @@ function renderSphereBody(ctx, body) {
 
     const deltaXToStack = Math.min(Math.max(-PLAY_AREA_WIDTH, stackX-p.x), PLAY_AREA_WIDTH);
     const reflectXRange = -(deltaXToStack / PLAY_AREA_WIDTH) * 0.18;
-    const reflectOpacity = 0.2 * Math.min(1, p.y / DANGER_AREA_HEIGHT);
+    const reflectOpacity = 0.2 * Math.min(1, p.y / ABOVE_PLAY_AREA_HEIGHT);
 
     ctx.globalCompositeOperation = 'overlay'
     ctx.fillStyle = `rgba(255, 255, 255, ${reflectOpacity})`;

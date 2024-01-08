@@ -1,6 +1,6 @@
 // config
-const DANGER_AREA_HEIGHT = 150;
-const DROP_FLOOR_HEIGHT  = DANGER_AREA_HEIGHT - 15; // drop from a bit further up
+const ABOVE_PLAY_AREA_HEIGHT = 150;
+const DROP_FLOOR_HEIGHT      = ABOVE_PLAY_AREA_HEIGHT - 15; // drop from a bit further up
 
 const PLAY_AREA_HEIGHT = 600; // if changing these, make sure to also update the css
 const PLAY_AREA_WIDTH  = 500; // if changing these, make sure to also update the css
@@ -38,7 +38,7 @@ const SPHERES_CONFIG = [
 // }
 
 // load
-const mergeSound = new Audio('./assets/sound/merge-pop.wav');
+const mergeSound  = new Audio('./assets/sound/merge-pop.wav');
 const mergeSound2 = new Audio('./assets/sound/merge-pop.wav');
 
 // font
@@ -81,7 +81,7 @@ document.getElementById('seed').textContent = "Seed: " + Common._seed;
 const mainCanvas = document.getElementById('canvas-container');
 const mainCtx = mainCanvas.getContext('2d');
 mainCanvas.width = PLAY_AREA_WIDTH;
-mainCanvas.height = PLAY_AREA_HEIGHT + DANGER_AREA_HEIGHT;
+mainCanvas.height = PLAY_AREA_HEIGHT + ABOVE_PLAY_AREA_HEIGHT;
 const ctxSprites = {};
 ctxSprites.bg = new Image();
     ctxSprites.bg.src = './assets/img/bg.png';
@@ -146,7 +146,7 @@ Events.on(engine, 'beforeUpdate', (event) => {
     // check bounds
     const droppedSpheresTopY = (compWorld.bodies.length > 0) ? Composite.bounds(compWorld).min.y : Infinity;
     
-    if (droppedSpheresTopY <= DANGER_AREA_HEIGHT) {
+    if (droppedSpheresTopY <= ABOVE_PLAY_AREA_HEIGHT) {
         if (tickWhereTopLastReached === null) {
             // initial reach
             tickWhereTopLastReached = currentTick;
@@ -250,7 +250,7 @@ function endedTouch(event) {
 function sceneSetup() {
     // background
     Composite.add(world, Bodies.rectangle(
-        PLAY_AREA_WIDTH/2, (DANGER_AREA_HEIGHT+PLAY_AREA_HEIGHT)/2, PLAY_AREA_WIDTH, DANGER_AREA_HEIGHT+PLAY_AREA_HEIGHT, {
+        PLAY_AREA_WIDTH/2, (ABOVE_PLAY_AREA_HEIGHT+PLAY_AREA_HEIGHT)/2, PLAY_AREA_WIDTH, ABOVE_PLAY_AREA_HEIGHT+PLAY_AREA_HEIGHT, {
             render: { sprite: { texture: './img/bg.png' } },
             isStatic: true,
             collisionFilter: { mask: 2 }
@@ -258,20 +258,18 @@ function sceneSetup() {
     ));
 
     // floor and walls
-    const wallStyle = { fillStyle: '#F9F' };
     const wallWidth = 100;
-    const totalHeight = PLAY_AREA_HEIGHT + DANGER_AREA_HEIGHT;
+    const totalHeight = PLAY_AREA_HEIGHT + ABOVE_PLAY_AREA_HEIGHT;
     Composite.add(world, [
-        Bodies.rectangle(PLAY_AREA_WIDTH/2, totalHeight + wallWidth/2, PLAY_AREA_WIDTH, wallWidth, { isStatic: true, render: wallStyle }),
-        Bodies.rectangle(PLAY_AREA_WIDTH + wallWidth/2, totalHeight/2, wallWidth, totalHeight, { isStatic: true, render: wallStyle }),
-        Bodies.rectangle(       - wallWidth/2, totalHeight/2, wallWidth, totalHeight, { isStatic: true, render: wallStyle }),
+        Bodies.rectangle(PLAY_AREA_WIDTH/2, totalHeight + wallWidth/2, PLAY_AREA_WIDTH, wallWidth, { isStatic: true }),
+        Bodies.rectangle(    PLAY_AREA_WIDTH + wallWidth/2, totalHeight/2, wallWidth, totalHeight, { isStatic: true }),
+        Bodies.rectangle(                    - wallWidth/2, totalHeight/2, wallWidth, totalHeight, { isStatic: true }),
     ]);
 
     // sensor - anything that collided before cant touch this
-    Composite.add(world, Bodies.rectangle(PLAY_AREA_WIDTH/2, DROP_FLOOR_HEIGHT/2, PLAY_AREA_WIDTH+60, DANGER_AREA_HEIGHT, {
+    Composite.add(world, Bodies.rectangle(PLAY_AREA_WIDTH/2, DROP_FLOOR_HEIGHT/2, PLAY_AREA_WIDTH+60, ABOVE_PLAY_AREA_HEIGHT, {
         isStatic: true,
         isSensor: true,
-        render: { fillStyle: 'transparent' }//, strokeStyle: '#20082E', lineWidth: DROP_BARRIER }
     }));
 
     // init stack of static spheres
